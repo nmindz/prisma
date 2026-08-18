@@ -697,6 +697,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-surreal-target/1-surreal-target/src/exports/schema.ts",
+      "domain": "targets",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-surreal-target/1-surreal-target/src/exports/runtime.ts",
       "domain": "targets",
       "layer": "targets",

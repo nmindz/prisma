@@ -1,5 +1,5 @@
 import { SurrealDriverImpl } from '@internal/driver-surrealdb/runtime';
-import { SurrealAnalyzer, SurrealTable } from '@internal/surreal-contract';
+import { buildSurrealNamespace, SurrealAnalyzer, SurrealTable } from '@internal/surreal-contract';
 import {
   buildSurrealSchemaIR,
   diffSurrealSchemas,
@@ -14,6 +14,7 @@ import {
   renderDefineAnalyzer,
   renderDefineField,
 } from '../src/exports/ddl';
+import { contractToSurrealSchemaIR } from '../src/exports/schema';
 
 const binding = {
   url: process.env['SURREALDB_TEST_URL'] ?? 'ws://127.0.0.1:8112/rpc',
@@ -80,40 +81,17 @@ const tables = {
   }),
 };
 
+/**
+ * The contract side of the comparison, built the way a migration planner
+ * would build it: project the namespace's entities through the DDL renderer.
+ */
 function expectedSchema(): SurrealSchemaIR {
-  return {
-    analyzers: Object.fromEntries(
-      Object.entries(analyzers).map(([name, a]) => [name, renderDefineAnalyzer(name, a)]),
-    ),
-    tables: Object.fromEntries(
-      Object.entries(tables).map(([name, table]) => {
-        const [definition] = renderCreateTableStatements(name, table);
-        return [
-          name,
-          {
-            name,
-            definition: definition ?? '',
-            fields: Object.fromEntries(
-              table.fields.map((field) => [
-                field.name,
-                renderCreateTableStatements(name, table).find((s) =>
-                  s.startsWith(`DEFINE FIELD \`${field.name}\``),
-                ) ?? '',
-              ]),
-            ),
-            indexes: Object.fromEntries(
-              table.indexes.map((index) => [
-                index.name,
-                renderCreateTableStatements(name, table).find((s) =>
-                  s.startsWith(`DEFINE INDEX \`${index.name}\``),
-                ) ?? '',
-              ]),
-            ),
-          },
-        ];
-      }),
-    ),
-  };
+  return contractToSurrealSchemaIR({
+    __unbound__: buildSurrealNamespace({
+      id: '__unbound__',
+      entries: { table: tables, analyzer: analyzers },
+    }),
+  });
 }
 
 /**

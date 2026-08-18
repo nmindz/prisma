@@ -4356,6 +4356,9 @@ importers:
       '@internal/surreal-errors':
         specifier: workspace:8.0.0-rc.3
         version: link:../../2-surreal-family/1-foundation/surreal-errors
+      '@internal/surreal-schema-ir':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/3-tooling/surreal-schema-ir
       '@internal/surreal-value':
         specifier: workspace:8.0.0-rc.3
         version: link:../../2-surreal-family/1-foundation/surreal-value
@@ -4372,9 +4375,6 @@ importers:
       '@internal/driver-surrealdb':
         specifier: workspace:8.0.0-rc.3
         version: link:../3-surreal-driver
-      '@internal/surreal-schema-ir':
-        specifier: workspace:8.0.0-rc.3
-        version: link:../../2-surreal-family/3-tooling/surreal-schema-ir
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.3
         version: link:../../0-config/tsconfig
