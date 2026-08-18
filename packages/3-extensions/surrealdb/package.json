@@ -25,6 +25,7 @@
     "@internal/family-surreal": "workspace:8.0.0-rc.3",
     "@internal/framework-components": "workspace:8.0.0-rc.3",
     "@internal/surreal-contract": "workspace:8.0.0-rc.3",
+    "@internal/surreal-contract-ts": "workspace:8.0.0-rc.3",
     "@internal/surreal-errors": "workspace:8.0.0-rc.3",
     "@internal/surreal-lowering": "workspace:8.0.0-rc.3",
     "@internal/surreal-orm": "workspace:8.0.0-rc.3",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@internal/surreal-lowering": "workspace:8.0.0-rc.3",
+    "@internal/surreal-schema-ir": "workspace:8.0.0-rc.3",
     "@repo/tsconfig": "workspace:8.0.0-rc.3",
     "@repo/tsdown": "workspace:8.0.0-rc.3",
     "tsdown": "catalog:",
@@ -56,6 +58,7 @@
   ],
   "exports": {
     "./config": "./dist/config.mjs",
+    "./contract-builder": "./dist/contract-builder.mjs",
     "./control": "./dist/control.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"

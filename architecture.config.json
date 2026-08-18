@@ -637,6 +637,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/2-surreal-family/2-authoring/**",
+      "domain": "surreal",
+      "layer": "authoring",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/2-surreal-family/3-tooling/**",
       "domain": "surreal",
       "layer": "tooling",
@@ -809,6 +815,12 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-extensions/surrealdb/src/exports/contract-builder.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-extensions/surrealdb/src/exports/control.ts",
