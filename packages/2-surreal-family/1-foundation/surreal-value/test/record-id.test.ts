@@ -1,0 +1,64 @@
+import { describe, expect, it } from 'vitest';
+import {
+  isRecordId,
+  RecordId,
+  SurrealDatetime,
+  SurrealDecimal,
+  SurrealParamRef,
+} from '../src/exports/index';
+
+describe('RecordId', () => {
+  it('renders as table:id', () => {
+    expect(new RecordId('person', 'alice').toString()).toBe('person:alice');
+  });
+
+  it('serializes to the wire string form', () => {
+    expect(JSON.stringify({ ref: new RecordId('person', 'alice') })).toBe('{"ref":"person:alice"}');
+  });
+
+  it('parses the wire form on the first colon', () => {
+    const parsed = RecordId.parse('person:has:colons');
+    expect(parsed?.tableName).toBe('person');
+    expect(parsed?.id).toBe('has:colons');
+  });
+
+  it.each(['person', ':alice', 'person:', ''])('rejects %o as a record id', (text) => {
+    expect(RecordId.parse(text)).toBeUndefined();
+  });
+
+  it('is frozen so a lowered statement cannot change underneath its parameters', () => {
+    expect(Object.isFrozen(new RecordId('person', 'alice'))).toBe(true);
+  });
+
+  it('recognises its own instances', () => {
+    expect(isRecordId(new RecordId('person', 'alice'))).toBe(true);
+    expect(isRecordId('person:alice')).toBe(false);
+  });
+});
+
+describe('tagged scalars', () => {
+  it('accepts a Date and keeps ISO text', () => {
+    expect(new SurrealDatetime(new Date('2024-01-02T03:04:05.000Z')).value).toBe(
+      '2024-01-02T03:04:05.000Z',
+    );
+  });
+
+  it('keeps decimals as text rather than routing them through a JS number', () => {
+    expect(new SurrealDecimal('12345678901234567890.0987654321').value).toBe(
+      '12345678901234567890.0987654321',
+    );
+  });
+
+  it('freezes every wrapper', () => {
+    expect(Object.isFrozen(new SurrealDecimal('1'))).toBe(true);
+    expect(Object.isFrozen(new SurrealDatetime('2024-01-01T00:00:00Z'))).toBe(true);
+  });
+});
+
+describe('SurrealParamRef', () => {
+  it('carries the assigned name and codec id', () => {
+    const ref = SurrealParamRef.of(1, { name: 'p0', codecId: 'surrealdb/int@1' });
+    expect(ref).toMatchObject({ value: 1, name: 'p0', codecId: 'surrealdb/int@1' });
+    expect(Object.isFrozen(ref)).toBe(true);
+  });
+});
