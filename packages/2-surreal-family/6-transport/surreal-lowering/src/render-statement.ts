@@ -22,14 +22,19 @@ function join(parts: readonly string[]): string {
   return parts.filter((part) => part.length > 0).join(' ');
 }
 
+/**
+ * The statement's subject. Rendered in predicate position: `FROM person:alice`
+ * and `FROM type::record('person', $p)` are both how the planner finds
+ * records, and a cast there would defeat the record-id lookup.
+ */
 function renderTarget(target: SurrealTarget, ctx: RenderContext): string {
   switch (target.kind) {
     case 'table':
       return quoteIdentifier(target.name);
     case 'record':
-      return renderRecordTarget(target.table, target.id, ctx);
+      return renderRecordTarget(target.table, target.id, ctx, 'predicate');
     case 'expr':
-      return renderExpr(target.expr, ctx);
+      return renderExpr(target.expr, ctx, 'predicate');
     default:
       return assertNever(target, 'unreachable: every SurrealTarget kind is rendered above');
   }
@@ -39,7 +44,7 @@ function renderAssignments(assignments: readonly Assignment[], ctx: RenderContex
   return assignments
     .map(
       (assignment) =>
-        `${renderPath(assignment.path, ctx)} ${assignment.operator} ${renderExpr(assignment.value, ctx)}`,
+        `${renderPath(assignment.path, ctx)} ${assignment.operator} ${renderExpr(assignment.value, ctx, 'write')}`,
     )
     .join(', ');
 }
@@ -48,17 +53,17 @@ function renderPayload(payload: MutationPayload | undefined, ctx: RenderContext)
   if (payload === undefined) return '';
   switch (payload.kind) {
     case 'content':
-      return `CONTENT ${renderExpr(payload.value, ctx)}`;
+      return `CONTENT ${renderExpr(payload.value, ctx, 'write')}`;
     case 'merge':
-      return `MERGE ${renderExpr(payload.value, ctx)}`;
+      return `MERGE ${renderExpr(payload.value, ctx, 'write')}`;
     case 'replace':
-      return `REPLACE ${renderExpr(payload.value, ctx)}`;
+      return `REPLACE ${renderExpr(payload.value, ctx, 'write')}`;
     case 'patch':
-      return `PATCH ${renderExpr(payload.value, ctx)}`;
+      return `PATCH ${renderExpr(payload.value, ctx, 'write')}`;
     case 'set':
       return `SET ${renderAssignments(payload.assignments, ctx)}`;
     case 'unset':
-      return `UNSET ${payload.fields.map((f) => renderExpr(f, ctx)).join(', ')}`;
+      return `UNSET ${payload.fields.map((f) => renderExpr(f, ctx, 'write')).join(', ')}`;
     default:
       return assertNever(payload, 'unreachable: every MutationPayload kind is rendered above');
   }
@@ -93,7 +98,7 @@ function renderProjections(
 ): string {
   return projections
     .map((projection) => {
-      const rendered = renderExpr(projection.expr, ctx);
+      const rendered = renderExpr(projection.expr, ctx, 'predicate');
       return projection.alias === undefined
         ? rendered
         : `${rendered} AS ${quoteIdentifier(projection.alias)}`;
@@ -111,13 +116,13 @@ function renderLimitLike(
   ctx: RenderContext,
 ): string {
   if (value === undefined) return '';
-  return `${keyword} ${typeof value === 'number' ? value : renderExpr(value, ctx)}`;
+  return `${keyword} ${typeof value === 'number' ? value : renderExpr(value, ctx, 'predicate')}`;
 }
 
 function renderGrouping(statement: SelectStatement, ctx: RenderContext): string {
   if (statement.groupAll === true) return 'GROUP ALL';
   if (statement.groupBy === undefined || statement.groupBy.length === 0) return '';
-  return `GROUP BY ${statement.groupBy.map((expr) => renderExpr(expr, ctx)).join(', ')}`;
+  return `GROUP BY ${statement.groupBy.map((expr) => renderExpr(expr, ctx, 'predicate')).join(', ')}`;
 }
 
 function renderOrder(statement: SelectStatement, ctx: RenderContext): string {
@@ -125,7 +130,7 @@ function renderOrder(statement: SelectStatement, ctx: RenderContext): string {
   if (statement.orderBy === undefined || statement.orderBy.length === 0) return '';
   const terms = statement.orderBy.map((term) =>
     join([
-      renderExpr(term.expr, ctx),
+      renderExpr(term.expr, ctx, 'predicate'),
       term.collate === true ? 'COLLATE' : '',
       term.numeric === true ? 'NUMERIC' : '',
       term.direction === undefined ? '' : term.direction.toUpperCase(),
@@ -153,22 +158,22 @@ function renderSelect(statement: SelectStatement, ctx: RenderContext): string {
     renderProjections(statement.projections, ctx),
     statement.omit === undefined || statement.omit.length === 0
       ? ''
-      : `OMIT ${statement.omit.map((expr) => renderExpr(expr, ctx)).join(', ')}`,
+      : `OMIT ${statement.omit.map((expr) => renderExpr(expr, ctx, 'predicate')).join(', ')}`,
     'FROM',
     statement.only === true ? 'ONLY' : '',
     statement.from.map((target) => renderTarget(target, ctx)).join(', '),
     renderWithIndex(statement),
-    statement.where === undefined ? '' : `WHERE ${renderExpr(statement.where, ctx)}`,
+    statement.where === undefined ? '' : `WHERE ${renderExpr(statement.where, ctx, 'predicate')}`,
     statement.splitOn === undefined || statement.splitOn.length === 0
       ? ''
-      : `SPLIT ON ${statement.splitOn.map((expr) => renderExpr(expr, ctx)).join(', ')}`,
+      : `SPLIT ON ${statement.splitOn.map((expr) => renderExpr(expr, ctx, 'predicate')).join(', ')}`,
     renderGrouping(statement, ctx),
     renderOrder(statement, ctx),
     renderLimitLike('LIMIT', statement.limit, ctx),
     renderLimitLike('START', statement.start, ctx),
     statement.fetch === undefined || statement.fetch.length === 0
       ? ''
-      : `FETCH ${statement.fetch.map((expr) => renderExpr(expr, ctx)).join(', ')}`,
+      : `FETCH ${statement.fetch.map((expr) => renderExpr(expr, ctx, 'predicate')).join(', ')}`,
     renderTail(statement),
     renderExplain(statement),
   ]);
@@ -178,9 +183,9 @@ function renderInsert(statement: InsertStatement, ctx: RenderContext): string {
   const rows =
     statement.rows.kind === 'columns'
       ? `(${statement.rows.columns.map(quoteIdentifier).join(', ')}) VALUES ${statement.rows.tuples
-          .map((tuple) => `(${tuple.map((expr) => renderExpr(expr, ctx)).join(', ')})`)
+          .map((tuple) => `(${tuple.map((expr) => renderExpr(expr, ctx, 'write')).join(', ')})`)
           .join(', ')}`
-      : statement.rows.objects.map((object) => renderExpr(object, ctx)).join(', ');
+      : statement.rows.objects.map((object) => renderExpr(object, ctx, 'write')).join(', ');
   return join([
     'INSERT',
     statement.ignore === true ? 'IGNORE' : '',
@@ -204,7 +209,7 @@ function renderWrite(
   const payload = 'payload' in statement ? renderPayload(statement.payload, ctx) : '';
   const where =
     'where' in statement && statement.where !== undefined
-      ? `WHERE ${renderExpr(statement.where, ctx)}`
+      ? `WHERE ${renderExpr(statement.where, ctx, 'predicate')}`
       : '';
   return join([
     keyword,
@@ -225,7 +230,7 @@ function renderRelate(
   statement: Extract<SurrealStatement, { kind: 'relate' }>,
   ctx: RenderContext,
 ): string {
-  const path = `${renderExpr(statement.from, ctx)}->${quoteIdentifier(statement.edge)}->${renderExpr(statement.to, ctx)}`;
+  const path = `${renderExpr(statement.from, ctx, 'predicate')}->${quoteIdentifier(statement.edge)}->${renderExpr(statement.to, ctx, 'predicate')}`;
   return join([
     'RELATE',
     statement.only === true ? 'ONLY' : '',
@@ -255,12 +260,12 @@ export function renderStatement(statement: SurrealStatement, ctx: RenderContext)
     case 'relate':
       return renderRelate(statement, ctx);
     case 'return':
-      return `RETURN ${renderExpr(statement.expr, ctx)}`;
+      return `RETURN ${renderExpr(statement.expr, ctx, 'predicate')}`;
     case 'let':
-      return `LET $${statement.name} = ${renderExpr(statement.expr, ctx)}`;
+      return `LET $${statement.name} = ${renderExpr(statement.expr, ctx, 'write')}`;
     case 'raw-statement':
       return statement.parts
-        .map((part) => (part.kind === 'text' ? part.text : renderExpr(part.expr, ctx)))
+        .map((part) => (part.kind === 'text' ? part.text : renderExpr(part.expr, ctx, 'predicate')))
         .join('');
     default:
       return assertNever(statement, 'unreachable: every SurrealStatement kind is rendered above');

@@ -83,14 +83,25 @@ describe('bindsAsNone', () => {
 });
 
 describe('applyBindCast', () => {
-  it('prefixes the reference when a cast is needed', () => {
-    expect(applyBindCast('$p0', decimal, '1.5')).toBe('<decimal> $p0');
+  it('casts a write, which SurrealDB coerces against the declared field type', () => {
+    expect(applyBindCast('$p0', decimal, '1.5', 'write')).toBe('<decimal> $p0');
   });
 
-  it('returns the reference unchanged when none is', () => {
-    expect(applyBindCast('$p0', text, 'x')).toBe('$p0');
-    expect(applyBindCast('$p0', undefined, 'x')).toBe('$p0');
-    expect(applyBindCast('$p0', decimal, null)).toBe('$p0');
+  it('never casts a predicate, because the cast costs the index', () => {
+    // Measured on SurrealDB v3.2.4: `WHERE amt = <decimal> $p` plans as a
+    // TableScan at ~10.7ms where `WHERE amt = $p` plans as an IndexScan at
+    // ~110µs. EXPLAIN reports "pre_decode_filter: no (unsupported predicate)".
+    expect(applyBindCast('$p0', decimal, '1.5', 'predicate')).toBe('$p0');
+    expect(applyBindCast('$p0', datetime, 'x', 'predicate')).toBe('$p0');
+    expect(applyBindCast('$p0', { kind: 'record', tables: ['person'] }, 'person:a', 'predicate')).toBe(
+      '$p0',
+    );
+  });
+
+  it('returns the reference unchanged when no cast applies', () => {
+    expect(applyBindCast('$p0', text, 'x', 'write')).toBe('$p0');
+    expect(applyBindCast('$p0', undefined, 'x', 'write')).toBe('$p0');
+    expect(applyBindCast('$p0', decimal, null, 'write')).toBe('$p0');
   });
 });
 

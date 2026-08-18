@@ -7,5 +7,6 @@ export default defineConfig({
     codecs: 'src/exports/codecs.ts',
     'codec-ids': 'src/exports/codec-ids.ts',
     ddl: 'src/exports/ddl.ts',
+    contract: 'src/exports/contract.ts',
   },
 });

@@ -45,8 +45,8 @@
     "src"
   ],
   "exports": {
-    "./runtime": "./dist/runtime.mjs",
     "./control": "./dist/control.mjs",
+    "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

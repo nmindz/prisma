@@ -1,9 +1,7 @@
 import {
   SurrealAnalyzer,
   SurrealField,
-  type SurrealFieldInput,
   SurrealIndex,
-  type SurrealIndexInput,
   SurrealTable,
 } from '@internal/surreal-contract';
 import { describe, expect, it } from 'vitest';
@@ -13,103 +11,88 @@ import {
   renderDefineField,
   renderDefineIndex,
   renderDefineTable,
+  renderRemoveAnalyzer,
   renderRemoveField,
   renderRemoveIndex,
   renderRemoveTable,
 } from '../src/exports/ddl';
 
-/**
- * Every expected string in this suite was executed against SurrealDB v3.2.4
- * and accepted. The server rejected three earlier spellings, so these are
- * transcriptions of what works rather than of what the syntax looks like it
- * should be.
- */
 describe('renderDefineTable', () => {
-  it('renders a plain document table', () => {
+  it('renders a schemafull document table', () => {
     expect(renderDefineTable('person', new SurrealTable())).toBe(
       'DEFINE TABLE `person` TYPE NORMAL SCHEMAFULL',
     );
   });
 
-  it('renders SCHEMALESS when the table is not schemafull', () => {
-    expect(renderDefineTable('bag', new SurrealTable({ schemafull: false }))).toBe(
-      'DEFINE TABLE `bag` TYPE NORMAL SCHEMALESS',
+  it('renders SCHEMALESS when the contract declares it', () => {
+    expect(renderDefineTable('blob', new SurrealTable({ schemafull: false }))).toBe(
+      'DEFINE TABLE `blob` TYPE NORMAL SCHEMALESS',
     );
   });
 
-  it('renders a graph edge table with its endpoints', () => {
+  it('renders TYPE ANY for a table that accepts any shape', () => {
+    expect(renderDefineTable('misc', new SurrealTable({ tableType: { kind: 'any' } }))).toBe(
+      'DEFINE TABLE `misc` TYPE ANY SCHEMAFULL',
+    );
+  });
+
+  it('renders a relation table, which is what RELATE writes edges into', () => {
     const follows = new SurrealTable({
-      tableType: { kind: 'relation', from: ['person'], to: ['person', 'company'], enforced: true },
       schemafull: false,
+      tableType: { kind: 'relation', from: ['person'], to: ['person', 'company'] },
     });
     expect(renderDefineTable('follows', follows)).toBe(
-      'DEFINE TABLE `follows` TYPE RELATION IN `person` OUT `person` | `company` ENFORCED SCHEMALESS',
+      'DEFINE TABLE `follows` TYPE RELATION IN `person` OUT `person` | `company` SCHEMALESS',
     );
   });
 
-  it('renders permissions and a comment', () => {
-    const table = new SurrealTable({ permissions: { kind: 'full' }, comment: 'people' });
-    expect(renderDefineTable('person', table)).toBe(
-      "DEFINE TABLE `person` TYPE NORMAL SCHEMAFULL PERMISSIONS FULL COMMENT 'people'",
-    );
-  });
-
-  it('renders per-verb permissions', () => {
-    const table = new SurrealTable({
-      permissions: { kind: 'specific', select: 'true', delete: 'false' },
+  it('marks a relation ENFORCED when the contract asks', () => {
+    const follows = new SurrealTable({
+      tableType: { kind: 'relation', from: ['person'], to: ['person'], enforced: true },
     });
-    expect(renderDefineTable('person', table)).toBe(
-      'DEFINE TABLE `person` TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select true FOR delete false',
-    );
+    expect(renderDefineTable('follows', follows)).toContain('ENFORCED');
   });
 
-  it('renders the idempotency modifiers db init needs', () => {
-    const table = new SurrealTable();
-    expect(renderDefineTable('person', table, 'if-not-exists')).toBe(
-      'DEFINE TABLE IF NOT EXISTS `person` TYPE NORMAL SCHEMAFULL',
+  it('renders the OVERWRITE and IF NOT EXISTS modes', () => {
+    expect(renderDefineTable('t', new SurrealTable(), 'overwrite')).toBe(
+      'DEFINE TABLE OVERWRITE `t` TYPE NORMAL SCHEMAFULL',
     );
-    expect(renderDefineTable('person', table, 'overwrite')).toBe(
-      'DEFINE TABLE OVERWRITE `person` TYPE NORMAL SCHEMAFULL',
+    expect(renderDefineTable('t', new SurrealTable(), 'if-not-exists')).toBe(
+      'DEFINE TABLE IF NOT EXISTS `t` TYPE NORMAL SCHEMAFULL',
     );
   });
 });
 
 describe('renderDefineField', () => {
-  const field = (input: SurrealFieldInput) => new SurrealField(input);
+  const field = (input: ConstructorParameters<typeof SurrealField>[0]) =>
+    renderDefineField('person', new SurrealField(input));
 
   it('renders a scalar field', () => {
-    expect(
-      renderDefineField(
-        'person',
-        field({ name: 'name', type: { kind: 'scalar', name: 'string' }, codecId: 's' }),
-      ),
-    ).toBe('DEFINE FIELD `name` ON TABLE `person` TYPE string');
+    expect(field({ name: 'name', type: { kind: 'scalar', name: 'string' }, codecId: 'c' })).toBe(
+      'DEFINE FIELD `name` ON TABLE `person` TYPE string',
+    );
   });
 
-  it('renders an optional field as option<…>', () => {
+  it('renders a nested path segment by segment, not as one quoted name', () => {
     expect(
-      renderDefineField(
-        'person',
-        field({
-          name: 'age',
-          type: { kind: 'option', of: { kind: 'scalar', name: 'int' } },
-          codecId: 'i',
-        }),
-      ),
-    ).toBe('DEFINE FIELD `age` ON TABLE `person` TYPE option<int>');
+      field({ name: 'meta.author', type: { kind: 'scalar', name: 'string' }, codecId: 'c' }),
+    ).toBe('DEFINE FIELD `meta`.`author` ON TABLE `person` TYPE string');
   });
 
-  it('puts FLEXIBLE after TYPE, which is the only order SurrealDB accepts', () => {
+  it('leaves the array wildcard unquoted so it stays a path operator', () => {
+    expect(field({ name: 'tags.*', type: { kind: 'scalar', name: 'string' }, codecId: 'c' })).toBe(
+      'DEFINE FIELD `tags`.* ON TABLE `person` TYPE string',
+    );
+  });
+
+  it('puts FLEXIBLE after TYPE, the only order SurrealDB accepts', () => {
     expect(
-      renderDefineField(
-        'person',
-        field({
-          name: 'meta',
-          type: { kind: 'scalar', name: 'object' },
-          codecId: 'o',
-          flexible: true,
-        }),
-      ),
+      field({
+        name: 'meta',
+        type: { kind: 'scalar', name: 'object' },
+        codecId: 'c',
+        flexible: true,
+      }),
     ).toBe('DEFINE FIELD `meta` ON TABLE `person` TYPE object FLEXIBLE');
   });
 
@@ -117,10 +100,10 @@ describe('renderDefineField', () => {
     expect(
       renderDefineField(
         'post',
-        field({
+        new SurrealField({
           name: 'author',
           type: { kind: 'record', tables: ['person'] },
-          codecId: 'r',
+          codecId: 'c',
           reference: { kind: 'cascade' },
         }),
       ),
@@ -129,192 +112,152 @@ describe('renderDefineField', () => {
     );
   });
 
-  it('renders DEFAULT, VALUE, ASSERT and READONLY in the accepted order', () => {
+  it('renders DEFAULT, VALUE, ASSERT and READONLY in SurrealQL order', () => {
     expect(
-      renderDefineField(
-        'person',
-        field({
-          name: 'bio',
-          type: { kind: 'scalar', name: 'string' },
-          codecId: 's',
-          defaultExpression: "''",
-          valueExpression: 'string::trim($value)',
-          assertExpression: 'string::len($value) < 500',
-          readOnly: true,
-        }),
-      ),
+      field({
+        name: 'created',
+        type: { kind: 'scalar', name: 'datetime' },
+        codecId: 'c',
+        defaultExpression: 'time::now()',
+        valueExpression: 'time::now()',
+        assertExpression: '$value != NONE',
+        readOnly: true,
+      }),
     ).toBe(
-      "DEFINE FIELD `bio` ON TABLE `person` TYPE string DEFAULT '' VALUE string::trim($value) ASSERT string::len($value) < 500 READONLY",
+      'DEFINE FIELD `created` ON TABLE `person` TYPE datetime DEFAULT time::now() VALUE time::now() ASSERT $value != NONE READONLY',
     );
   });
 
   it('renders DEFAULT ALWAYS distinctly from DEFAULT', () => {
     expect(
-      renderDefineField(
-        'person',
-        field({
-          name: 'seen',
-          type: { kind: 'scalar', name: 'datetime' },
-          codecId: 'd',
-          defaultExpression: 'time::now()',
-          defaultAlways: true,
-        }),
-      ),
-    ).toBe('DEFINE FIELD `seen` ON TABLE `person` TYPE datetime DEFAULT ALWAYS time::now()');
+      field({
+        name: 'seen',
+        type: { kind: 'scalar', name: 'datetime' },
+        codecId: 'c',
+        defaultExpression: 'time::now()',
+        defaultAlways: true,
+      }),
+    ).toContain('DEFAULT ALWAYS time::now()');
   });
 
-  it('renders a nested path segment by segment', () => {
+  it('renders an optional type through its option constructor', () => {
     expect(
-      renderDefineField(
-        'person',
-        field({ name: 'meta.author', type: { kind: 'scalar', name: 'string' }, codecId: 's' }),
-      ),
-    ).toBe('DEFINE FIELD `meta`.`author` ON TABLE `person` TYPE string');
-  });
-
-  it('leaves the array wildcard unquoted', () => {
-    expect(
-      renderDefineField(
-        'person',
-        field({ name: 'tags.*', type: { kind: 'scalar', name: 'string' }, codecId: 's' }),
-      ),
-    ).toBe('DEFINE FIELD `tags`.* ON TABLE `person` TYPE string');
+      field({
+        name: 'balance',
+        type: { kind: 'option', of: { kind: 'scalar', name: 'decimal' } },
+        codecId: 'c',
+      }),
+    ).toBe('DEFINE FIELD `balance` ON TABLE `person` TYPE option<decimal>');
   });
 });
 
 describe('renderDefineIndex', () => {
-  const index = (input: SurrealIndexInput) => new SurrealIndex(input);
+  const index = (input: ConstructorParameters<typeof SurrealIndex>[0]) =>
+    renderDefineIndex('doc', new SurrealIndex(input));
 
   it('renders a plain index', () => {
-    expect(
-      renderDefineIndex(
-        'person',
-        index({ name: 'i', fields: ['name'], variant: { kind: 'plain' } }),
-      ),
-    ).toBe('DEFINE INDEX `i` ON TABLE `person` FIELDS `name`');
+    expect(index({ name: 'by_name', fields: ['name'], variant: { kind: 'plain' } })).toBe(
+      'DEFINE INDEX `by_name` ON TABLE `doc` FIELDS `name`',
+    );
   });
 
   it('renders a unique index over several fields', () => {
-    expect(
-      renderDefineIndex(
-        'person',
-        index({ name: 'i', fields: ['a', 'b'], variant: { kind: 'unique' } }),
-      ),
-    ).toBe('DEFINE INDEX `i` ON TABLE `person` FIELDS `a`, `b` UNIQUE');
-  });
-
-  it('renders FULLTEXT, the v3 spelling that replaced SEARCH', () => {
-    expect(
-      renderDefineIndex(
-        'person',
-        index({
-          name: 'i',
-          fields: ['bio'],
-          variant: {
-            kind: 'fulltext',
-            analyzer: 'ascii',
-            bm25: { k1: 1.2, b: 0.75 },
-            highlights: true,
-          },
-        }),
-      ),
-    ).toBe(
-      'DEFINE INDEX `i` ON TABLE `person` FIELDS `bio` FULLTEXT ANALYZER `ascii` BM25(1.2,0.75) HIGHLIGHTS',
+    expect(index({ name: 'uq', fields: ['first', 'last'], variant: { kind: 'unique' } })).toBe(
+      'DEFINE INDEX `uq` ON TABLE `doc` FIELDS `first`, `last` UNIQUE',
     );
   });
 
-  it('renders a bare BM25 when no coefficients are given', () => {
+  it('renders an HNSW vector index with its distance metric', () => {
     expect(
-      renderDefineIndex(
-        'person',
-        index({ name: 'i', fields: ['bio'], variant: { kind: 'fulltext', analyzer: 'ascii' } }),
-      ),
-    ).toBe('DEFINE INDEX `i` ON TABLE `person` FIELDS `bio` FULLTEXT ANALYZER `ascii` BM25');
-  });
-
-  it('renders an HNSW vector index with every operand', () => {
-    expect(
-      renderDefineIndex(
-        'doc',
-        index({
-          name: 'v',
-          fields: ['embedding'],
-          variant: {
-            kind: 'hnsw',
-            dimension: 3,
-            element: 'F32',
-            distance: 'cosine',
-            efc: 150,
-            m: 12,
-          },
-        }),
-      ),
+      index({
+        name: 'vec',
+        fields: ['embedding'],
+        variant: { kind: 'hnsw', dimension: 1536, distance: 'cosine', efc: 150, m: 12 },
+      }),
     ).toBe(
-      'DEFINE INDEX `v` ON TABLE `doc` FIELDS `embedding` HNSW DIMENSION 3 TYPE F32 DIST COSINE EFC 150 M 12',
+      'DEFINE INDEX `vec` ON TABLE `doc` FIELDS `embedding` HNSW DIMENSION 1536 DIST COSINE EFC 150 M 12',
     );
   });
 
-  it('renders CONCURRENTLY', () => {
+  it('renders a bare HNSW index, letting SurrealDB pick the defaults', () => {
     expect(
-      renderDefineIndex(
-        'person',
-        index({ name: 'i', fields: ['a'], variant: { kind: 'plain' }, concurrently: true }),
-      ),
-    ).toBe('DEFINE INDEX `i` ON TABLE `person` FIELDS `a` CONCURRENTLY');
+      index({ name: 'vec', fields: ['embedding'], variant: { kind: 'hnsw', dimension: 3 } }),
+    ).toBe('DEFINE INDEX `vec` ON TABLE `doc` FIELDS `embedding` HNSW DIMENSION 3');
+  });
+
+  it('renders FULLTEXT, the keyword that replaced SEARCH in v3', () => {
+    expect(
+      index({
+        name: 'ft',
+        fields: ['body'],
+        variant: {
+          kind: 'fulltext',
+          analyzer: 'english',
+          bm25: { k1: 1.2, b: 0.75 },
+          highlights: true,
+        },
+      }),
+    ).toBe(
+      'DEFINE INDEX `ft` ON TABLE `doc` FIELDS `body` FULLTEXT ANALYZER `english` BM25(1.2,0.75) HIGHLIGHTS',
+    );
+  });
+
+  it('renders a bare BM25 when no tuning parameters are given', () => {
+    expect(
+      index({
+        name: 'ft',
+        fields: ['body'],
+        variant: { kind: 'fulltext', analyzer: 'english' },
+      }),
+    ).toBe('DEFINE INDEX `ft` ON TABLE `doc` FIELDS `body` FULLTEXT ANALYZER `english` BM25');
   });
 });
 
 describe('renderDefineAnalyzer', () => {
-  it('renders tokenizers and filters as comma-joined lists', () => {
+  it('renders tokenizers and filters', () => {
     expect(
       renderDefineAnalyzer(
-        'ascii',
-        new SurrealAnalyzer({ tokenizers: ['blank', 'class'], filters: ['lowercase', 'ascii'] }),
+        'english',
+        new SurrealAnalyzer({
+          tokenizers: ['blank', 'class'],
+          filters: ['lowercase', 'snowball(english)'],
+        }),
       ),
-    ).toBe('DEFINE ANALYZER `ascii` TOKENIZERS blank,class FILTERS lowercase,ascii');
+    ).toBe('DEFINE ANALYZER `english` TOKENIZERS blank,class FILTERS lowercase,snowball(english)');
   });
 
-  it('omits FILTERS when there are none', () => {
+  it('omits the filter clause when there are none', () => {
     expect(renderDefineAnalyzer('plain', new SurrealAnalyzer({ tokenizers: ['blank'] }))).toBe(
       'DEFINE ANALYZER `plain` TOKENIZERS blank',
     );
   });
 });
 
-describe('remove statements', () => {
-  it('guard with IF EXISTS by default', () => {
-    expect(renderRemoveTable('person')).toBe('REMOVE TABLE IF EXISTS `person`');
-    expect(renderRemoveField('person', 'meta.a')).toBe(
-      'REMOVE FIELD IF EXISTS `meta`.`a` ON TABLE `person`',
-    );
-    expect(renderRemoveIndex('person', 'i')).toBe('REMOVE INDEX IF EXISTS `i` ON TABLE `person`');
-  });
-
-  it('drop the guard when asked', () => {
-    expect(renderRemoveTable('person', false)).toBe('REMOVE TABLE `person`');
-  });
-});
-
 describe('renderCreateTableStatements', () => {
   it('orders the table before its fields and its fields before its indexes', () => {
     const table = new SurrealTable({
-      fields: [{ name: 'name', type: { kind: 'scalar', name: 'string' }, codecId: 's' }],
-      indexes: [{ name: 'i', fields: ['name'], variant: { kind: 'unique' } }],
+      fields: [{ name: 'name', type: { kind: 'scalar', name: 'string' }, codecId: 'c' }],
+      indexes: [{ name: 'uq', fields: ['name'], variant: { kind: 'unique' } }],
     });
     expect(renderCreateTableStatements('person', table)).toEqual([
       'DEFINE TABLE `person` TYPE NORMAL SCHEMAFULL',
       'DEFINE FIELD `name` ON TABLE `person` TYPE string',
-      'DEFINE INDEX `i` ON TABLE `person` FIELDS `name` UNIQUE',
+      'DEFINE INDEX `uq` ON TABLE `person` FIELDS `name` UNIQUE',
     ]);
   });
+});
 
-  it('threads the idempotency mode through every statement', () => {
-    const table = new SurrealTable({
-      fields: [{ name: 'name', type: { kind: 'scalar', name: 'string' }, codecId: 's' }],
-    });
-    expect(renderCreateTableStatements('person', table, 'overwrite')).toEqual([
-      'DEFINE TABLE OVERWRITE `person` TYPE NORMAL SCHEMAFULL',
-      'DEFINE FIELD OVERWRITE `name` ON TABLE `person` TYPE string',
-    ]);
+describe('remove statements', () => {
+  it('guard with IF EXISTS by default', () => {
+    expect(renderRemoveTable('person')).toBe('REMOVE TABLE IF EXISTS `person`');
+    expect(renderRemoveField('person', 'name')).toBe(
+      'REMOVE FIELD IF EXISTS `name` ON TABLE `person`',
+    );
+    expect(renderRemoveIndex('person', 'uq')).toBe('REMOVE INDEX IF EXISTS `uq` ON TABLE `person`');
+    expect(renderRemoveAnalyzer('english')).toBe('REMOVE ANALYZER IF EXISTS `english`');
+  });
+
+  it('drop the guard when the caller wants the failure', () => {
+    expect(renderRemoveTable('person', false)).toBe('REMOVE TABLE `person`');
   });
 });

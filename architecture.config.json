@@ -749,6 +749,120 @@
       "domain": "targets",
       "layer": "drivers",
       "plane": "runtime"
+    },
+    {
+      "glob": "packages/2-surreal-family/1-foundation/**",
+      "domain": "surreal",
+      "layer": "foundation",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/2-surreal-family/4-query/**",
+      "domain": "surreal",
+      "layer": "query",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/2-surreal-family/6-transport/**",
+      "domain": "surreal",
+      "layer": "transport",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/2-surreal-family/7-runtime/**",
+      "domain": "surreal",
+      "layer": "runtime",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-surreal-target/1-surreal-target/src/core/**",
+      "domain": "targets",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-surreal-target/1-surreal-target/src/exports/pack.ts",
+      "domain": "targets",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-surreal-target/1-surreal-target/src/exports/codecs.ts",
+      "domain": "targets",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-surreal-target/1-surreal-target/src/exports/codec-ids.ts",
+      "domain": "targets",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-surreal-target/1-surreal-target/src/exports/contract.ts",
+      "domain": "targets",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-surreal-target/1-surreal-target/src/exports/ddl.ts",
+      "domain": "targets",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-surreal-target/1-surreal-target/src/exports/runtime.ts",
+      "domain": "targets",
+      "layer": "targets",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-surreal-target/2-surreal-adapter/src/core/**",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-surreal-target/2-surreal-adapter/src/core/runtime-adapter.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-surreal-target/2-surreal-adapter/src/exports/codec-lookup.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-surreal-target/2-surreal-adapter/src/exports/runtime.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-surreal-target/3-surreal-driver/**",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-extensions/surrealdb/src/runtime/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-extensions/surrealdb/src/errors.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-extensions/surrealdb/src/exports/runtime.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
     }
   ],
   "rules": {
@@ -765,49 +879,107 @@
       "reason": "Framework domain is the innermost/core domain and may not import from any other domain"
     },
     "sql": {
-      "mayImportFrom": ["framework"],
+      "mayImportFrom": [
+        "framework"
+      ],
       "reason": "SQL domain may import only from framework domain"
     },
     "mongo": {
-      "mayImportFrom": ["framework"],
+      "mayImportFrom": [
+        "framework"
+      ],
       "reason": "Mongo domain may import only from framework domain"
     },
     "targets": {
-      "mayImportFrom": ["framework", "sql", "mongo"],
-      "reason": "Targets domain may import from framework, sql, and mongo domains"
+      "mayImportFrom": [
+        "framework",
+        "sql",
+        "mongo",
+        "surreal"
+      ],
+      "reason": "Targets domain may import from framework, sql, mongo, and surreal domains"
     },
     "extensions": {
-      "mayImportFrom": ["framework", "sql", "mongo", "targets", "extensions"],
+      "mayImportFrom": [
+        "framework",
+        "sql",
+        "mongo",
+        "surreal",
+        "targets",
+        "extensions"
+      ],
       "reason": "Extensions domain may import from any domain"
+    },
+    "surreal": {
+      "mayImportFrom": [
+        "framework"
+      ],
+      "reason": "SurrealDB domain may import only from framework domain"
     }
   },
   "planeRules": {
     "shared": {
-      "allow": ["shared"],
-      "forbid": ["migration", "runtime"],
+      "allow": [
+        "shared"
+      ],
+      "forbid": [
+        "migration",
+        "runtime"
+      ],
       "exceptions": []
     },
     "migration": {
-      "allow": ["shared", "migration"],
-      "forbid": ["runtime"],
+      "allow": [
+        "shared",
+        "migration"
+      ],
+      "forbid": [
+        "runtime"
+      ],
       "exceptions": []
     },
     "runtime": {
-      "allow": ["shared", "runtime"],
-      "forbid": ["migration"],
+      "allow": [
+        "shared",
+        "runtime"
+      ],
+      "forbid": [
+        "migration"
+      ],
       "exceptions": []
     }
   },
   "crossDomainExceptions": [],
   "layerOrder": {
-    "framework": ["foundation", "core", "authoring", "tooling"],
-    "sql": ["core", "authoring", "tooling", "lanes", "runtime", "adapters", "drivers", "family"],
+    "framework": [
+      "foundation",
+      "core",
+      "authoring",
+      "tooling"
+    ],
+    "sql": [
+      "core",
+      "authoring",
+      "tooling",
+      "lanes",
+      "runtime",
+      "adapters",
+      "drivers",
+      "family"
+    ],
     "mongo": [
       "foundation",
       "authoring",
       "tooling",
       "query",
       "query-builders",
+      "transport",
+      "runtime",
+      "family"
+    ],
+    "surreal": [
+      "foundation",
+      "query",
       "transport",
       "runtime",
       "family"

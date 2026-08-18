@@ -1,4 +1,5 @@
 import { freezeNode, IRNodeBase } from '@internal/framework-components/ir';
+import { defineNodeKind } from './node-kind';
 
 export interface SurrealAnalyzerInput {
   /** `TOKENIZERS blank,class,camel,punct`. */
@@ -17,13 +18,14 @@ export interface SurrealAnalyzerInput {
  * analyzer before the index that depends on it.
  */
 export class SurrealAnalyzer extends IRNodeBase {
-  readonly kind = 'surreal-analyzer' as const;
+  declare readonly kind: 'surreal-analyzer';
   readonly tokenizers: readonly string[];
   declare readonly filters?: readonly string[];
   declare readonly comment?: string;
 
   constructor(input: SurrealAnalyzerInput) {
     super();
+    defineNodeKind(this, 'surreal-analyzer');
     this.tokenizers = Object.freeze([...input.tokenizers]);
     if (input.filters !== undefined) this.filters = Object.freeze([...input.filters]);
     if (input.comment !== undefined) this.comment = input.comment;

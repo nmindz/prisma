@@ -1,5 +1,6 @@
 import { freezeNode, IRNodeBase } from '@internal/framework-components/ir';
 import type { SurrealFieldType, SurrealPermissions, SurrealReferenceAction } from '../field-types';
+import { defineNodeKind } from './node-kind';
 
 /**
  * Construction input for {@link SurrealField}, mirroring the on-disk storage
@@ -43,7 +44,7 @@ export interface SurrealFieldInput {
  * through. All of that is declaration, not data, so it lives in the contract.
  */
 export class SurrealField extends IRNodeBase {
-  readonly kind = 'surreal-field' as const;
+  declare readonly kind: 'surreal-field';
   readonly name: string;
   readonly type: SurrealFieldType;
   readonly codecId: string;
@@ -59,6 +60,7 @@ export class SurrealField extends IRNodeBase {
 
   constructor(input: SurrealFieldInput) {
     super();
+    defineNodeKind(this, 'surreal-field');
     this.name = input.name;
     this.type = input.type;
     this.codecId = input.codecId;

@@ -1,11 +1,11 @@
 {
-  "name": "@internal/target-surrealdb",
+  "name": "@internal/extension-surrealdb",
   "private": true,
   "version": "8.0.0-rc.3",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "SurrealDB target pack for Prisma 8: codecs, DDL, and descriptors",
+  "description": "User-facing SurrealDB client for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
@@ -18,17 +18,20 @@
   },
   "dependencies": {
     "@internal/contract": "workspace:8.0.0-rc.3",
+    "@internal/adapter-surrealdb": "workspace:8.0.0-rc.3",
+    "@internal/driver-surrealdb": "workspace:8.0.0-rc.3",
     "@internal/framework-components": "workspace:8.0.0-rc.3",
-    "@internal/surreal-codec": "workspace:8.0.0-rc.3",
     "@internal/surreal-contract": "workspace:8.0.0-rc.3",
     "@internal/surreal-errors": "workspace:8.0.0-rc.3",
+    "@internal/surreal-lowering": "workspace:8.0.0-rc.3",
+    "@internal/surreal-query-ast": "workspace:8.0.0-rc.3",
+    "@internal/surreal-runtime": "workspace:8.0.0-rc.3",
     "@internal/surreal-value": "workspace:8.0.0-rc.3",
-    "@internal/utils": "workspace:8.0.0-rc.3",
-    "@standard-schema/spec": "1.1.0",
-    "arktype": "catalog:"
+    "@internal/target-surrealdb": "workspace:8.0.0-rc.3",
+    "@internal/utils": "workspace:8.0.0-rc.3"
   },
   "devDependencies": {
-    "@internal/driver-surrealdb": "workspace:8.0.0-rc.3",
+    "@internal/surreal-lowering": "workspace:8.0.0-rc.3",
     "@repo/tsconfig": "workspace:8.0.0-rc.3",
     "@repo/tsdown": "workspace:8.0.0-rc.3",
     "tsdown": "catalog:",
@@ -48,11 +51,6 @@
     "src"
   ],
   "exports": {
-    "./codec-ids": "./dist/codec-ids.mjs",
-    "./codecs": "./dist/codecs.mjs",
-    "./contract": "./dist/contract.mjs",
-    "./ddl": "./dist/ddl.mjs",
-    "./pack": "./dist/pack.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
@@ -62,6 +60,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
-    "directory": "packages/3-surreal-target/1-surreal-target"
+    "directory": "packages/3-extensions/surrealdb"
   }
 }

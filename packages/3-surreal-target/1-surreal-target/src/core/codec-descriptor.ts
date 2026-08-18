@@ -24,12 +24,21 @@ export abstract class SurrealCodecDescriptor extends CodecDescriptorImpl<void> {
 
   protected abstract build(): Codec<string, readonly CodecTrait[], unknown, unknown>;
 
-  override factory(): (
+  /**
+   * Declared as a bound class-field arrow, not a prototype method.
+   *
+   * `materializeCodec` reads `descriptor.factory` off the instance and calls
+   * it detached from `descriptor` — `blindCast(descriptor.factory)(params)(ctx)`
+   * — so a prototype method here would run with `this` unbound and throw on
+   * `this.build()`. An arrow class field captures `this` at construction time
+   * instead, so the reference stays valid no matter how it is later invoked.
+   */
+  override readonly factory = (): ((
     ctx: CodecInstanceContext,
-  ) => Codec<string, readonly CodecTrait[], unknown, unknown> {
+  ) => Codec<string, readonly CodecTrait[], unknown, unknown>) => {
     const codec = this.build();
     return () => codec;
-  }
+  };
 }
 
 /** Conversions a concrete SurrealDB codec supplies. */

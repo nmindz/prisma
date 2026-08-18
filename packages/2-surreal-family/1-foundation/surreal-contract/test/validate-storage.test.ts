@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   composeSurrealEntityKinds,
-  tableEntityKind,
   linkedTableNames,
   SurrealTable,
+  tableEntityKind,
   validateSurrealTables,
 } from '../src/exports/index';
 

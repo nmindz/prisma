@@ -44,6 +44,36 @@ function castableType(type: SurrealFieldType): SurrealFieldType | undefined {
 }
 
 /**
+ * Where a bound value sits in the statement.
+ *
+ * The distinction decides whether the bind site may carry a cast, and it is
+ * load-bearing for performance rather than for correctness alone.
+ *
+ * - **`write`** — inside `CONTENT`, `SET`, `MERGE`, or an `INSERT` tuple. The
+ *   cast is required: SurrealDB coerces a write against the field's declared
+ *   type and rejects the JSON form outright, e.g. *Couldn't coerce value for
+ *   field `amt`: Expected `decimal` but found `'3.5'`*.
+ * - **`predicate`** — inside `WHERE`, `ORDER BY`, or any other position the
+ *   query planner inspects. The cast must be omitted. SurrealDB coerces the
+ *   operand against the field type on its own here, so the cast buys nothing —
+ *   and it costs the index. Measured against SurrealDB v3.2.4 over 10–20k
+ *   rows:
+ *
+ *   | Predicate | Plan | Time |
+ *   | --- | --- | --- |
+ *   | `WHERE id = $p` | `RecordIdScan` | ~66µs |
+ *   | `WHERE id = <record> $p` | `TableScan` | ~19ms |
+ *   | `WHERE at = $p` | `IndexScan` | ~130µs |
+ *   | `WHERE at = <datetime> $p` | `TableScan` | ~10.4ms |
+ *
+ *   `EXPLAIN` names the reason: *pre_decode_filter: no (unsupported
+ *   predicate)*. A cast makes the predicate opaque to the planner, which then
+ *   falls back to reading every record — the record-id case lands two orders
+ *   of magnitude off the point lookup it should have been.
+ */
+export type BindPosition = 'write' | 'predicate';
+
+/**
  * Whether an absent value should be written as the SurrealQL literal `NONE`
  * rather than bound as a variable.
  *
@@ -77,16 +107,21 @@ export function bindCastFor(type: SurrealFieldType, value: unknown): string | un
 }
 
 /**
- * Wraps a bind-site reference (`$p0`) in its cast when one is needed.
- * Returns the reference unchanged otherwise, so callers can use this
- * unconditionally.
+ * Wraps a bind-site reference (`$p0`) in its cast when one is needed, given
+ * where the reference sits. Returns it unchanged otherwise, so callers can
+ * use this unconditionally.
+ *
+ * A `predicate` position never takes a cast — see {@link BindPosition} for the
+ * measurements. That is not a heuristic to revisit: casting there turns an
+ * index or record-id lookup into a full scan.
  */
 export function applyBindCast(
   reference: string,
   type: SurrealFieldType | undefined,
   value: unknown,
+  position: BindPosition,
 ): string {
-  if (type === undefined) return reference;
+  if (position === 'predicate' || type === undefined) return reference;
   const cast = bindCastFor(type, value);
   return cast === undefined ? reference : `${cast} ${reference}`;
 }

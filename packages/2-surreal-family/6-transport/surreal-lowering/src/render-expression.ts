@@ -22,7 +22,7 @@ import { assertNever } from '@internal/utils/internal-error';
  * cycle with the statement renderer, which necessarily calls back into here.
  */
 export interface RenderContext {
-  bind(param: Extract<SurrealExpr, { kind: 'param' }>): string;
+  bind(param: Extract<SurrealExpr, { kind: 'param' }>, position: BindPosition): string;
   statement(statement: SurrealStatement): string;
 }
 
@@ -43,14 +43,19 @@ export function renderRecordId(recordId: RecordId): string {
  * param with `type::record("person", $id)`*. A computed key therefore changes
  * the shape of the whole reference, not just its tail.
  */
-export function renderRecordTarget(table: string, key: RecordIdKey, ctx: RenderContext): string {
+export function renderRecordTarget(
+  table: string,
+  key: RecordIdKey,
+  ctx: RenderContext,
+  position: BindPosition,
+): string {
   switch (key.kind) {
     case 'identifier':
       return `${quoteIdentifier(table)}:${quoteIdentifier(key.name)}`;
     case 'number':
       return `${quoteIdentifier(table)}:${key.value}`;
     case 'expr':
-      return `type::record(${escapeStringLiteral(table)}, ${renderExpr(key.expr, ctx)})`;
+      return `type::record(${escapeStringLiteral(table)}, ${renderExpr(key.expr, ctx, position)})`;
     default:
       return assertNever(key, 'unreachable: every RecordIdKey kind is rendered above');
   }
@@ -65,7 +70,8 @@ function renderPathSegment(segment: FieldPathSegment, ctx: RenderContext): strin
     case 'index':
       return `[${segment.index}]`;
     case 'where':
-      return `[WHERE ${renderExpr(segment.predicate, ctx)}]`;
+      // A path filter is a predicate wherever the path itself sits.
+      return `[WHERE ${renderExpr(segment.predicate, ctx, 'predicate')}]`;
     default:
       return assertNever(segment, 'unreachable: every FieldPathSegment kind is rendered above');
   }
@@ -86,7 +92,7 @@ export function renderPath(path: readonly FieldPathSegment[], ctx: RenderContext
 
 function renderGraphStep(step: GraphStep, ctx: RenderContext): string {
   const arrow = step.direction === 'out' ? '->' : step.direction === 'in' ? '<-' : '<->';
-  const filter = step.filter === undefined ? '' : `[WHERE ${renderExpr(step.filter, ctx)}]`;
+  const filter = step.filter === undefined ? '' : `[WHERE ${renderExpr(step.filter, ctx, 'predicate')}]`;
   const destination = step.to === undefined ? '' : `${arrow}${quoteIdentifier(step.to)}`;
   return `${arrow}${quoteIdentifier(step.edge)}${filter}${destination}`;
 }
@@ -101,20 +107,37 @@ function renderLiteral(value: string | number | boolean | null): string {
   return String(value);
 }
 
-function renderIf(expr: Extract<SurrealExpr, { kind: 'if' }>, ctx: RenderContext): string {
+function renderIf(
+  expr: Extract<SurrealExpr, { kind: 'if' }>,
+  ctx: RenderContext,
+  position: BindPosition,
+): string {
   const branches = expr.branches
     .map(
       (branch, index) =>
-        `${index === 0 ? 'IF' : 'ELSE IF'} ${renderExpr(branch.when, ctx)} THEN ${renderExpr(branch.then, ctx)}`,
+        `${index === 0 ? 'IF' : 'ELSE IF'} ${renderExpr(branch.when, ctx, 'predicate')} THEN ${renderExpr(branch.then, ctx, position)}`,
     )
     .join(' ');
-  const otherwise = expr.otherwise === undefined ? '' : ` ELSE ${renderExpr(expr.otherwise, ctx)}`;
+  const otherwise =
+    expr.otherwise === undefined ? '' : ` ELSE ${renderExpr(expr.otherwise, ctx, position)}`;
   return `${branches}${otherwise} END`;
 }
 
-/** Renders one expression to SurrealQL text. */
-export function renderExpr(expr: SurrealExpr, ctx: RenderContext): string {
-  const render = (child: SurrealExpr): string => renderExpr(child, ctx);
+/**
+ * Renders one expression to SurrealQL text.
+ *
+ * `position` decides whether a bind site may carry a cast. It propagates to
+ * children unchanged except where the child's role differs from its parent's
+ * — the condition of an `IF`, and a `[WHERE …]` path filter, are predicates
+ * wherever the expression containing them sits.
+ */
+export function renderExpr(
+  expr: SurrealExpr,
+  ctx: RenderContext,
+  position: BindPosition,
+): string {
+  const render = (child: SurrealExpr): string => renderExpr(child, ctx, position);
+  const predicate = (child: SurrealExpr): string => renderExpr(child, ctx, 'predicate');
   switch (expr.kind) {
     case 'all':
       return '*';
@@ -123,27 +146,31 @@ export function renderExpr(expr: SurrealExpr, ctx: RenderContext): string {
     case 'literal':
       return renderLiteral(expr.value);
     case 'param':
-      return ctx.bind(expr);
+      return ctx.bind(expr, position);
     case 'record-id':
       return renderRecordId(expr.recordId);
     case 'field':
       return renderPath(expr.path, ctx);
     case 'binary':
-      return `${render(expr.left)} ${expr.operator} ${render(expr.right)}`;
+      // A comparison is a predicate on both sides regardless of where it
+      // appears: `WHERE at = $p` must stay uncast to keep its index.
+      return `${predicate(expr.left)} ${expr.operator} ${predicate(expr.right)}`;
     case 'and':
-      return expr.operands.length === 0 ? 'true' : `(${expr.operands.map(render).join(' AND ')})`;
+      return expr.operands.length === 0
+        ? 'true'
+        : `(${expr.operands.map(predicate).join(' AND ')})`;
     case 'or':
-      return expr.operands.length === 0 ? 'false' : `(${expr.operands.map(render).join(' OR ')})`;
+      return expr.operands.length === 0 ? 'false' : `(${expr.operands.map(predicate).join(' OR ')})`;
     case 'not':
-      return `!(${render(expr.operand)})`;
+      return `!(${predicate(expr.operand)})`;
     case 'presence':
-      return `${render(expr.operand)} IS ${expr.negated ? 'NOT ' : ''}${expr.test === 'null' ? 'NULL' : 'NONE'}`;
+      return `${predicate(expr.operand)} IS ${expr.negated ? 'NOT ' : ''}${expr.test === 'null' ? 'NULL' : 'NONE'}`;
     case 'function-call':
       return `${expr.name}(${expr.args.map(render).join(', ')})`;
     case 'cast':
       return `<${renderSurrealType(expr.type)}> ${render(expr.operand)}`;
     case 'if':
-      return renderIf(expr, ctx);
+      return renderIf(expr, ctx, position);
     case 'array':
       return `[${expr.items.map(render).join(', ')}]`;
     case 'object':
@@ -156,7 +183,9 @@ export function renderExpr(expr: SurrealExpr, ctx: RenderContext): string {
       return `${render(expr.start)}${steps}${tail}`;
     }
     case 'knn':
-      return `${render(expr.field)} <|${expr.k},${renderKnnOperand(expr.operand)}|> ${render(expr.vector)}`;
+      // The KNN operator is the planner's entry point into the vector index,
+      // so neither operand may be cast.
+      return `${predicate(expr.field)} <|${expr.k},${renderKnnOperand(expr.operand)}|> ${predicate(expr.vector)}`;
     case 'raw':
       return expr.parts
         .map((part) => (part.kind === 'text' ? part.text : render(part.expr)))

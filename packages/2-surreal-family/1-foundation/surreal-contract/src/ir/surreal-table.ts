@@ -1,6 +1,7 @@
 import type { ControlPolicy } from '@internal/contract/types';
 import { freezeNode, IRNodeBase } from '@internal/framework-components/ir';
 import type { SurrealPermissions, SurrealTableType } from '../field-types';
+import { defineNodeKind } from './node-kind';
 import { SurrealField, type SurrealFieldInput } from './surreal-field';
 import { SurrealIndex, type SurrealIndexInput } from './surreal-index';
 
@@ -41,7 +42,7 @@ export interface SurrealTableInput {
  * distinctions live in `tableType` and in the index variants.
  */
 export class SurrealTable extends IRNodeBase {
-  readonly kind = 'surreal-table' as const;
+  declare readonly kind: 'surreal-table';
   readonly tableType: SurrealTableType;
   readonly schemafull: boolean;
   readonly fields: ReadonlyArray<SurrealField>;
@@ -55,6 +56,7 @@ export class SurrealTable extends IRNodeBase {
 
   constructor(input: SurrealTableInput = {}) {
     super();
+    defineNodeKind(this, 'surreal-table');
     this.tableType = input.tableType ?? { kind: 'normal' };
     this.schemafull = input.schemafull ?? true;
     this.fields = Object.freeze(

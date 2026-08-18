@@ -4034,6 +4034,61 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/3-extensions/surrealdb:
+    dependencies:
+      '@internal/adapter-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../3-surreal-target/2-surreal-adapter
+      '@internal/contract':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../1-framework/0-foundation/contract
+      '@internal/driver-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../3-surreal-target/3-surreal-driver
+      '@internal/framework-components':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../1-framework/1-core/framework-components
+      '@internal/surreal-contract':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/1-foundation/surreal-contract
+      '@internal/surreal-errors':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/1-foundation/surreal-errors
+      '@internal/surreal-lowering':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/6-transport/surreal-lowering
+      '@internal/surreal-query-ast':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/4-query/query-ast
+      '@internal/surreal-runtime':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/7-runtime
+      '@internal/surreal-value':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/1-foundation/surreal-value
+      '@internal/target-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../3-surreal-target/1-surreal-target
+      '@internal/utils':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../1-framework/0-foundation/utils
+    devDependencies:
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../0-config/tsdown
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/3-mongo-target/1-mongo-target:
     dependencies:
       '@internal/cli':
@@ -4276,9 +4331,6 @@ importers:
       '@internal/surreal-errors':
         specifier: workspace:8.0.0-rc.3
         version: link:../../2-surreal-family/1-foundation/surreal-errors
-      '@internal/surreal-runtime':
-        specifier: workspace:8.0.0-rc.3
-        version: link:../../2-surreal-family/7-runtime
       '@internal/surreal-value':
         specifier: workspace:8.0.0-rc.3
         version: link:../../2-surreal-family/1-foundation/surreal-value
@@ -4288,7 +4340,59 @@ importers:
       '@standard-schema/spec':
         specifier: 1.1.0
         version: 1.1.0
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.3
     devDependencies:
+      '@internal/driver-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../3-surreal-driver
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../0-config/tsdown
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/3-surreal-target/2-surreal-adapter:
+    dependencies:
+      '@internal/framework-components':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../1-framework/1-core/framework-components
+      '@internal/surreal-codec':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/1-foundation/surreal-codec
+      '@internal/surreal-contract':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/1-foundation/surreal-contract
+      '@internal/surreal-lowering':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/6-transport/surreal-lowering
+      '@internal/surreal-query-ast':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/4-query/query-ast
+      '@internal/target-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../1-surreal-target
+      '@internal/utils':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../1-framework/0-foundation/utils
+    devDependencies:
+      '@internal/contract':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../1-framework/0-foundation/contract
+      '@internal/surreal-value':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/1-foundation/surreal-value
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.3
         version: link:../../0-config/tsconfig

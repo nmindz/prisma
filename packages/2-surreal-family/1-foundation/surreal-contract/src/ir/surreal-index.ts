@@ -1,5 +1,6 @@
 import { freezeNode, IRNodeBase } from '@internal/framework-components/ir';
 import type { SurrealIndexVariant } from '../field-types';
+import { defineNodeKind } from './node-kind';
 
 export interface SurrealIndexInput {
   readonly name: string;
@@ -21,7 +22,7 @@ export interface SurrealIndexInput {
  * full-text index impossible to declare without an analyzer.
  */
 export class SurrealIndex extends IRNodeBase {
-  readonly kind = 'surreal-index' as const;
+  declare readonly kind: 'surreal-index';
   readonly name: string;
   readonly fields: readonly string[];
   readonly variant: SurrealIndexVariant;
@@ -30,6 +31,7 @@ export class SurrealIndex extends IRNodeBase {
 
   constructor(input: SurrealIndexInput) {
     super();
+    defineNodeKind(this, 'surreal-index');
     this.name = input.name;
     this.fields = Object.freeze([...input.fields]);
     this.variant = input.variant;

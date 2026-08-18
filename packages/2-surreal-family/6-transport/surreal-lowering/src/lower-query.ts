@@ -9,16 +9,18 @@ import { renderStatement } from './render-statement';
  * accompany it.
  *
  * Nothing from the application reaches `surql`. A parameter becomes `$name`,
- * optionally wrapped in the SurrealQL cast its declared type needs — the JSON
+ * wrapped in a SurrealQL cast only where it is being *written*: the JSON
  * transport cannot tell a `decimal` from a string, so `<decimal> $p0` is what
- * makes the value arrive as the type the field expects. Identifiers are
- * quoted; every other character in the output was chosen by the builder.
+ * makes a written value arrive as the type the field expects. In a predicate
+ * the cast is omitted, because SurrealDB coerces the operand itself there and
+ * a cast would cost the index — see `BindPosition`. Identifiers are quoted;
+ * every other character in the output was chosen by the builder.
  */
 export function lowerQuery(query: SurrealQuery): LoweredSurrealQuery {
   const params = new Map<string, LoweredParam>();
 
   const ctx: RenderContext = {
-    bind(param) {
+    bind(param, position) {
       // An absent optional is the keyword NONE, not a bound null — see
       // `bindsAsNone`. No variable is registered for it: SurrealDB would
       // reject the value it carried.
@@ -30,7 +32,7 @@ export function lowerQuery(query: SurrealQuery): LoweredSurrealQuery {
           ...(param.codecId === undefined ? {} : { codecId: param.codecId }),
         });
       }
-      return applyBindCast(`$${param.name}`, param.fieldType, param.value);
+      return applyBindCast(`$${param.name}`, param.fieldType, param.value, position);
     },
     statement(statement: SurrealStatement) {
       return renderStatement(statement, ctx);
