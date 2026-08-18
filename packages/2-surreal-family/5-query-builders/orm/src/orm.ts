@@ -14,10 +14,21 @@ export type TableNames<TContract extends Contract<SurrealStorageShape>> =
   keyof TContract['storage']['namespaces'][typeof UNBOUND_NAMESPACE_ID]['entries']['table'] &
     string;
 
-/** One collection per declared table. */
-export type SurrealOrm<TContract extends Contract<SurrealStorageShape>> = {
-  readonly [Table in TableNames<TContract>]: SurrealCollection;
-};
+/**
+ * One collection per declared table.
+ *
+ * A contract whose type carries literal table names yields exactly those
+ * keys, so a misspelt collection is a compile error. A contract typed only as
+ * `Contract<SurrealStorageShape>` — one loaded from JSON with no generated
+ * `contract.d.ts` behind it — carries no literal names, and the map falls
+ * back to an open one. Collapsing to no keys instead would make the lane
+ * unusable exactly where it is most likely to be reached for.
+ */
+export type SurrealOrm<TContract extends Contract<SurrealStorageShape>> = [
+  TableNames<TContract>,
+] extends [never]
+  ? Readonly<Record<string, SurrealCollection>>
+  : { readonly [Table in TableNames<TContract>]: SurrealCollection };
 
 /**
  * Builds the collection lane over a contract.

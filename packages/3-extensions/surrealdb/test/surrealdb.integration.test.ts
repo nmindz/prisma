@@ -65,16 +65,21 @@ describe.skipIf(!available)('surrealdb() against a live server', () => {
   });
 
   describe('the collection lane', () => {
+    // The contract here comes from JSON with no generated `contract.d.ts`
+    // behind it, so the table map is the open fallback rather than a literal
+    // key set. A generated contract types `db.orm.person` directly.
+    const person = db.orm['person'] as NonNullable<(typeof db.orm)['person']>;
+
     it('creates and reads a record without hand-written SurrealQL', async () => {
-      await db.execute(db.orm.person.create({ id: 'orm1', data: { name: 'orm', age: 44 } }));
-      expect(await rows(db.orm.person.findUnique('orm1', { select: { name: true } }))).toEqual([
+      await db.execute(person.create({ id: 'orm1', data: { name: 'orm', age: 44 } }));
+      expect(await rows(person.findUnique('orm1', { select: { name: true } }))).toEqual([
         { name: 'orm' },
       ]);
     });
 
     it('filters, orders and pages', async () => {
       const found = await rows(
-        db.orm.person.findMany({
+        person.findMany({
           where: { age: { gte: 36 } },
           select: { name: true },
           orderBy: { age: 'desc' },
@@ -85,22 +90,20 @@ describe.skipIf(!available)('surrealdb() against a live server', () => {
     });
 
     it('counts a filtered subset', async () => {
-      expect(await rows(db.orm.person.count({ where: { age: { gte: 44 } } }))).toEqual([
-        { count: 1 },
-      ]);
+      expect(await rows(person.count({ where: { age: { gte: 44 } } }))).toEqual([{ count: 1 }]);
     });
 
     it('merges an update, leaving unlisted fields alone', async () => {
-      await db.execute(db.orm.person.update({ id: 'orm1', data: { age: 45 }, merge: true }));
-      expect(await rows(db.orm.person.findUnique('orm1'))).toEqual([
+      await db.execute(person.update({ id: 'orm1', data: { age: 45 }, merge: true }));
+      expect(await rows(person.findUnique('orm1'))).toEqual([
         { id: 'person:orm1', name: 'orm', age: 45 },
       ]);
     });
 
     it('deletes and reports what it removed', async () => {
-      const removed = await rows(db.orm.person.delete({ id: 'orm1' }));
+      const removed = await rows(person.delete({ id: 'orm1' }));
       expect(removed).toHaveLength(1);
-      expect(await rows(db.orm.person.findMany({ where: { name: 'orm' } }))).toEqual([]);
+      expect(await rows(person.findMany({ where: { name: 'orm' } }))).toEqual([]);
     });
   });
 

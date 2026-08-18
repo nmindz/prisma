@@ -4181,12 +4181,21 @@ importers:
       '@internal/adapter-surrealdb':
         specifier: workspace:8.0.0-rc.3
         version: link:../../3-surreal-target/2-surreal-adapter
+      '@internal/cli':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../1-framework/3-tooling/cli
+      '@internal/config':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../1-framework/1-core/config
       '@internal/contract':
         specifier: workspace:8.0.0-rc.3
         version: link:../../1-framework/0-foundation/contract
       '@internal/driver-surrealdb':
         specifier: workspace:8.0.0-rc.3
         version: link:../../3-surreal-target/3-surreal-driver
+      '@internal/family-surreal':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../2-surreal-family/9-family
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.3
         version: link:../../1-framework/1-core/framework-components
@@ -5561,6 +5570,9 @@ importers:
       '@internal/surreal-lowering':
         specifier: workspace:8.0.0-rc.3
         version: link:../../../2-surreal-family/6-transport/surreal-lowering
+      '@internal/surreal-orm':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/5-query-builders/orm
       '@internal/surreal-query-ast':
         specifier: workspace:8.0.0-rc.3
         version: link:../../../2-surreal-family/4-query/query-ast

@@ -38,13 +38,14 @@ export interface WhereInput {
 const COMBINATORS = new Set(['AND', 'OR', 'NOT']);
 
 /**
- * The operator names a `FieldFilter` may carry.
+ * The operators a `FieldFilter` may carry, in the order they are compiled.
  *
- * A `Set<string>` rather than a `keyof FieldFilter[]`: the only question asked
- * of it is whether an arbitrary incoming key is one of these, and answering
- * that against a typed key array needs a widening cast at every call.
+ * Compiling by walking this list rather than the caller's object keys does
+ * two things: the operator arrives already typed, and two filters that differ
+ * only in key order produce the same SurrealQL, which is what lets a content
+ * hash over a plan be a usable cache key.
  */
-const FIELD_FILTER_OPERATORS: ReadonlySet<string> = new Set([
+const FIELD_FILTER_OPERATORS: readonly (keyof FieldFilter)[] = [
   'equals',
   'not',
   'gt',
@@ -56,7 +57,9 @@ const FIELD_FILTER_OPERATORS: ReadonlySet<string> = new Set([
   'contains',
   'inside',
   'isNone',
-]);
+];
+
+const FIELD_FILTER_OPERATOR_NAMES: ReadonlySet<string> = new Set(FIELD_FILTER_OPERATORS);
 
 /** Allocates stable `$p0`, `$p1`, … names across one compiled statement. */
 export class ParamAllocator {
@@ -73,7 +76,7 @@ function isFieldFilter(value: unknown): value is FieldFilter {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const keys = Object.keys(value);
   if (keys.length === 0) return false;
-  return keys.every((key) => FIELD_FILTER_OPERATORS.has(key));
+  return keys.every((key) => FIELD_FILTER_OPERATOR_NAMES.has(key));
 }
 
 function comparison(
@@ -111,6 +114,26 @@ function comparison(
   }
 }
 
+/** Compiles one of `AND` / `OR` / `NOT`, or nothing when the value is empty. */
+function compileCombinator(
+  key: string,
+  value: unknown,
+  params: ParamAllocator,
+): SurrealExpr | undefined {
+  if (key === 'NOT') {
+    if (!isWhereInput(value)) return undefined;
+    const nested = compileWhere(value, params);
+    return nested === undefined ? undefined : not(nested);
+  }
+  if (!Array.isArray(value)) return undefined;
+  const nested = value
+    .filter(isWhereInput)
+    .map((entry) => compileWhere(entry, params))
+    .filter(isDefined);
+  if (nested.length === 0) return undefined;
+  return key === 'AND' ? and(...nested) : or(...nested);
+}
+
 /**
  * Compiles a `where` object into one predicate.
  *
@@ -127,20 +150,12 @@ export function compileWhere(
 
   for (const [key, value] of Object.entries(where)) {
     if (value === undefined) continue;
-    if (!COMBINATORS.has(key)) {
-      terms.push(...compileFieldTerms(key, value, params));
+    if (COMBINATORS.has(key)) {
+      const combined = compileCombinator(key, value, params);
+      if (combined !== undefined) terms.push(combined);
       continue;
     }
-    if (key === 'AND' && Array.isArray(value)) {
-      const nested = value.map((entry) => compileWhere(entry, params)).filter(isDefined);
-      if (nested.length > 0) terms.push(and(...nested));
-    } else if (key === 'OR' && Array.isArray(value)) {
-      const nested = value.map((entry) => compileWhere(entry, params)).filter(isDefined);
-      if (nested.length > 0) terms.push(or(...nested));
-    } else if (key === 'NOT' && isWhereInput(value)) {
-      const nested = compileWhere(value, params);
-      if (nested !== undefined) terms.push(not(nested));
-    }
+    terms.push(...compileFieldTerms(key, value, params));
   }
 
   if (terms.length === 0) return undefined;
@@ -157,9 +172,10 @@ function compileFieldTerms(
     return [binary('=', field(path), params.bind(value))];
   }
   const terms: SurrealExpr[] = [];
-  for (const [operator, operand] of Object.entries(value)) {
+  for (const operator of FIELD_FILTER_OPERATORS) {
+    const operand = value[operator];
     if (operand === undefined) continue;
-    terms.push(comparison(path, operator as keyof FieldFilter, operand, params));
+    terms.push(comparison(path, operator, operand, params));
   }
   return terms;
 }

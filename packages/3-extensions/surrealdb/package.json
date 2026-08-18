@@ -18,8 +18,11 @@
   },
   "dependencies": {
     "@internal/adapter-surrealdb": "workspace:8.0.0-rc.3",
+    "@internal/cli": "workspace:8.0.0-rc.3",
+    "@internal/config": "workspace:8.0.0-rc.3",
     "@internal/contract": "workspace:8.0.0-rc.3",
     "@internal/driver-surrealdb": "workspace:8.0.0-rc.3",
+    "@internal/family-surreal": "workspace:8.0.0-rc.3",
     "@internal/framework-components": "workspace:8.0.0-rc.3",
     "@internal/surreal-contract": "workspace:8.0.0-rc.3",
     "@internal/surreal-errors": "workspace:8.0.0-rc.3",
@@ -52,6 +55,8 @@
     "src"
   ],
   "exports": {
+    "./config": "./dist/config.mjs",
+    "./control": "./dist/control.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },

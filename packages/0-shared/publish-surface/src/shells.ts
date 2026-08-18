@@ -267,6 +267,7 @@ const SQL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
  * driver implements. `schema-ir` is what code driving drift detection reads.
  */
 const SURREAL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
+  { package: '@internal/surreal-orm', entry: 'orm' },
   { package: '@internal/surreal-query-ast', entry: 'query-ast' },
   { package: '@internal/surreal-lowering', entry: 'lowering' },
   { package: '@internal/surreal-schema-ir', entry: 'schema-ir' },
@@ -516,6 +517,11 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           dir: 'packages/2-surreal-family/4-query/query-ast',
           name: '@internal/surreal-query-ast',
           entry: 'query-ast',
+        },
+        {
+          dir: 'packages/2-surreal-family/5-query-builders/orm',
+          name: '@internal/surreal-orm',
+          entry: 'orm',
         },
         {
           dir: 'packages/2-surreal-family/6-transport/surreal-lowering',

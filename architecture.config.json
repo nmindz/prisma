@@ -769,6 +769,18 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-surreal-target/2-surreal-adapter/src/exports/control.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-surreal-target/2-surreal-adapter/src/core/control-adapter.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
       "glob": "packages/3-surreal-target/3-surreal-driver/**",
       "domain": "targets",
       "layer": "drivers",
@@ -785,6 +797,24 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
+    },
+    {
+      "glob": "packages/3-extensions/surrealdb/src/config/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-extensions/surrealdb/src/exports/config.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-extensions/surrealdb/src/exports/control.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
     },
     {
       "glob": "packages/3-extensions/surrealdb/src/exports/runtime.ts",
