@@ -661,6 +661,24 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/2-surreal-family/9-family/src/exports/pack.ts",
+      "domain": "surreal",
+      "layer": "family",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/2-surreal-family/9-family/src/core/**",
+      "domain": "surreal",
+      "layer": "family",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/2-surreal-family/9-family/src/exports/control.ts",
+      "domain": "surreal",
+      "layer": "family",
+      "plane": "migration"
+    },
+    {
       "glob": "packages/3-surreal-target/1-surreal-target/src/core/**",
       "domain": "targets",
       "layer": "targets",
