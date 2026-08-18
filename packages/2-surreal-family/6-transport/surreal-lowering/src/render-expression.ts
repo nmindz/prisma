@@ -92,7 +92,8 @@ export function renderPath(path: readonly FieldPathSegment[], ctx: RenderContext
 
 function renderGraphStep(step: GraphStep, ctx: RenderContext): string {
   const arrow = step.direction === 'out' ? '->' : step.direction === 'in' ? '<-' : '<->';
-  const filter = step.filter === undefined ? '' : `[WHERE ${renderExpr(step.filter, ctx, 'predicate')}]`;
+  const filter =
+    step.filter === undefined ? '' : `[WHERE ${renderExpr(step.filter, ctx, 'predicate')}]`;
   const destination = step.to === undefined ? '' : `${arrow}${quoteIdentifier(step.to)}`;
   return `${arrow}${quoteIdentifier(step.edge)}${filter}${destination}`;
 }
@@ -131,11 +132,7 @@ function renderIf(
  * — the condition of an `IF`, and a `[WHERE …]` path filter, are predicates
  * wherever the expression containing them sits.
  */
-export function renderExpr(
-  expr: SurrealExpr,
-  ctx: RenderContext,
-  position: BindPosition,
-): string {
+export function renderExpr(expr: SurrealExpr, ctx: RenderContext, position: BindPosition): string {
   const render = (child: SurrealExpr): string => renderExpr(child, ctx, position);
   const predicate = (child: SurrealExpr): string => renderExpr(child, ctx, 'predicate');
   switch (expr.kind) {
@@ -160,7 +157,9 @@ export function renderExpr(
         ? 'true'
         : `(${expr.operands.map(predicate).join(' AND ')})`;
     case 'or':
-      return expr.operands.length === 0 ? 'false' : `(${expr.operands.map(predicate).join(' OR ')})`;
+      return expr.operands.length === 0
+        ? 'false'
+        : `(${expr.operands.map(predicate).join(' OR ')})`;
     case 'not':
       return `!(${predicate(expr.operand)})`;
     case 'presence':

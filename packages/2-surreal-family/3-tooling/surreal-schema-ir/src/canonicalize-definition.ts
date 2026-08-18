@@ -44,28 +44,29 @@ const MATERIALIZED_DEFAULTS: readonly RegExp[] = [/ PERMISSIONS NONE$/i, / PERMI
  * Rewriting ours to theirs (rather than the reverse) avoids having to find the
  * matching angle bracket in a nested type.
  */
+/** Index of the `>` closing the `<` at `open`, or -1 when unbalanced. */
+function matchingAngle(text: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === '<') depth += 1;
+    else if (text[i] === '>') {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
 function expandOptionSugar(text: string): string {
   let out = text;
-  let guard = 0;
-  while (guard < 32) {
+  // Bounded rather than `while (true)`: a malformed type would otherwise spin.
+  for (let pass = 0; pass < 32; pass += 1) {
     const start = out.search(/\boption</);
     if (start === -1) break;
     const open = out.indexOf('<', start);
-    let depth = 0;
-    let close = -1;
-    for (let i = open; i < out.length; i += 1) {
-      if (out[i] === '<') depth += 1;
-      else if (out[i] === '>') {
-        depth -= 1;
-        if (depth === 0) {
-          close = i;
-          break;
-        }
-      }
-    }
+    const close = matchingAngle(out, open);
     if (close === -1) break;
     out = `${out.slice(0, start)}none | ${out.slice(open + 1, close)}${out.slice(close + 1)}`;
-    guard += 1;
   }
   return out;
 }

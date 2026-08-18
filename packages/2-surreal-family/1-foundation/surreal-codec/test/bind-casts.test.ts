@@ -93,9 +93,9 @@ describe('applyBindCast', () => {
     // ~110µs. EXPLAIN reports "pre_decode_filter: no (unsupported predicate)".
     expect(applyBindCast('$p0', decimal, '1.5', 'predicate')).toBe('$p0');
     expect(applyBindCast('$p0', datetime, 'x', 'predicate')).toBe('$p0');
-    expect(applyBindCast('$p0', { kind: 'record', tables: ['person'] }, 'person:a', 'predicate')).toBe(
-      '$p0',
-    );
+    expect(
+      applyBindCast('$p0', { kind: 'record', tables: ['person'] }, 'person:a', 'predicate'),
+    ).toBe('$p0');
   });
 
   it('returns the reference unchanged when no cast applies', () => {

@@ -103,6 +103,36 @@ function diffIndexes(
   }
 }
 
+function diffAnalyzers(
+  expected: SurrealSchemaIR,
+  actual: SurrealSchemaIR,
+  into: SurrealSchemaOperation[],
+): void {
+  for (const [analyzer, statement] of Object.entries(expected.analyzers)) {
+    const live = actual.analyzers[analyzer];
+    if (live === undefined) {
+      into.push({ kind: 'define-analyzer', analyzer, statement });
+    } else if (!same(statement, live)) {
+      into.push({ kind: 'redefine-analyzer', analyzer, statement });
+    }
+  }
+}
+
+function diffRemovals(
+  expected: SurrealSchemaIR,
+  actual: SurrealSchemaIR,
+  into: SurrealSchemaOperation[],
+): void {
+  for (const table of Object.keys(actual.tables)) {
+    if (expected.tables[table] === undefined) into.push({ kind: 'remove-table', table });
+  }
+  for (const analyzer of Object.keys(actual.analyzers)) {
+    if (expected.analyzers[analyzer] === undefined) {
+      into.push({ kind: 'remove-analyzer', analyzer });
+    }
+  }
+}
+
 /**
  * Compares the schema the contract asks for against the one the database has.
  *
@@ -117,39 +147,20 @@ export function diffSurrealSchemas(
   options: DiffOptions = {},
 ): readonly SurrealSchemaOperation[] {
   const operations: SurrealSchemaOperation[] = [];
+  diffAnalyzers(expected, actual, operations);
 
-  for (const [name, statement] of Object.entries(expected.analyzers)) {
-    const live = actual.analyzers[name];
+  for (const [table, schema] of Object.entries(expected.tables)) {
+    const live = actual.tables[table];
     if (live === undefined) {
-      operations.push({ kind: 'define-analyzer', analyzer: name, statement });
-    } else if (!same(statement, live)) {
-      operations.push({ kind: 'redefine-analyzer', analyzer: name, statement });
+      operations.push({ kind: 'define-table', table, statement: schema.definition });
+    } else if (!same(schema.definition, live.definition)) {
+      operations.push({ kind: 'redefine-table', table, statement: schema.definition });
     }
+    diffFields(table, schema.fields, live?.fields ?? {}, options, operations);
+    diffIndexes(table, schema.indexes, live?.indexes ?? {}, options, operations);
   }
 
-  for (const [name, table] of Object.entries(expected.tables)) {
-    const live = actual.tables[name];
-    if (live === undefined) {
-      operations.push({ kind: 'define-table', table: name, statement: table.definition });
-    } else if (!same(table.definition, live.definition)) {
-      operations.push({ kind: 'redefine-table', table: name, statement: table.definition });
-    }
-    diffFields(name, table.fields, live?.fields ?? {}, options, operations);
-    diffIndexes(name, table.indexes, live?.indexes ?? {}, options, operations);
-  }
-
-  if (options.removeUnknown === true) {
-    for (const name of Object.keys(actual.tables)) {
-      if (expected.tables[name] === undefined) {
-        operations.push({ kind: 'remove-table', table: name });
-      }
-    }
-    for (const name of Object.keys(actual.analyzers)) {
-      if (expected.analyzers[name] === undefined) {
-        operations.push({ kind: 'remove-analyzer', analyzer: name });
-      }
-    }
-  }
+  if (options.removeUnknown === true) diffRemovals(expected, actual, operations);
 
   return Object.freeze(operations);
 }
