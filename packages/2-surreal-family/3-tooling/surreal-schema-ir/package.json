@@ -1,11 +1,11 @@
 {
-  "name": "@internal/target-surrealdb",
+  "name": "@internal/surreal-schema-ir",
   "private": true,
   "version": "8.0.0-rc.3",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "SurrealDB target pack for Prisma 8: codecs, DDL, and descriptors",
+  "description": "Introspected SurrealDB schema shape, canonicalization, and diffing",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
@@ -17,19 +17,10 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.3",
-    "@internal/framework-components": "workspace:8.0.0-rc.3",
-    "@internal/surreal-codec": "workspace:8.0.0-rc.3",
     "@internal/surreal-contract": "workspace:8.0.0-rc.3",
-    "@internal/surreal-errors": "workspace:8.0.0-rc.3",
-    "@internal/surreal-value": "workspace:8.0.0-rc.3",
-    "@internal/utils": "workspace:8.0.0-rc.3",
-    "@standard-schema/spec": "1.1.0",
-    "arktype": "catalog:"
+    "@internal/utils": "workspace:8.0.0-rc.3"
   },
   "devDependencies": {
-    "@internal/driver-surrealdb": "workspace:8.0.0-rc.3",
-    "@internal/surreal-schema-ir": "workspace:8.0.0-rc.3",
     "@repo/tsconfig": "workspace:8.0.0-rc.3",
     "@repo/tsdown": "workspace:8.0.0-rc.3",
     "tsdown": "catalog:",
@@ -48,13 +39,9 @@
     "dist",
     "src"
   ],
+  "types": "./dist/index.d.mts",
   "exports": {
-    "./codec-ids": "./dist/codec-ids.mjs",
-    "./codecs": "./dist/codecs.mjs",
-    "./contract": "./dist/contract.mjs",
-    "./ddl": "./dist/ddl.mjs",
-    "./pack": "./dist/pack.mjs",
-    "./runtime": "./dist/runtime.mjs",
+    ".": "./dist/index.mjs",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -63,6 +50,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
-    "directory": "packages/3-surreal-target/1-surreal-target"
+    "directory": "packages/2-surreal-family/3-tooling/surreal-schema-ir"
   }
 }

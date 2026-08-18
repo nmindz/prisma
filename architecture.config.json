@@ -757,6 +757,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/2-surreal-family/3-tooling/**",
+      "domain": "surreal",
+      "layer": "tooling",
+      "plane": "migration"
+    },
+    {
       "glob": "packages/2-surreal-family/4-query/**",
       "domain": "surreal",
       "layer": "query",
@@ -979,7 +985,10 @@
     ],
     "surreal": [
       "foundation",
+      "authoring",
+      "tooling",
       "query",
+      "query-builders",
       "transport",
       "runtime",
       "family"
