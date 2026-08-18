@@ -631,126 +631,6 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/2-mongo-family/2-authoring/**",
-      "domain": "mongo",
-      "layer": "authoring",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/2-mongo-family/3-tooling/emitter/**",
-      "domain": "mongo",
-      "layer": "tooling",
-      "plane": "migration"
-    },
-    {
-      "glob": "packages/2-mongo-family/3-tooling/mongo-schema-ir/**",
-      "domain": "mongo",
-      "layer": "tooling",
-      "plane": "migration"
-    },
-    {
-      "glob": "packages/2-mongo-family/4-query/**",
-      "domain": "mongo",
-      "layer": "query",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/2-mongo-family/5-query-builders/orm/**",
-      "domain": "mongo",
-      "layer": "query-builders",
-      "plane": "runtime"
-    },
-    {
-      "glob": "packages/2-mongo-family/5-query-builders/pipeline-builder/**",
-      "domain": "mongo",
-      "layer": "query-builders",
-      "plane": "runtime"
-    },
-    {
-      "glob": "packages/2-mongo-family/6-transport/**",
-      "domain": "mongo",
-      "layer": "transport",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/2-mongo-family/7-runtime/**",
-      "domain": "mongo",
-      "layer": "runtime",
-      "plane": "runtime"
-    },
-    {
-      "glob": "packages/2-mongo-family/9-family/src/core/**",
-      "domain": "mongo",
-      "layer": "family",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/2-mongo-family/9-family/src/exports/control.ts",
-      "domain": "mongo",
-      "layer": "family",
-      "plane": "migration"
-    },
-    {
-      "glob": "packages/3-mongo-target/1-mongo-target/src/core/*.ts",
-      "domain": "extensions",
-      "layer": "targets",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/3-mongo-target/1-mongo-target/src/core/migrations/**",
-      "domain": "extensions",
-      "layer": "targets",
-      "plane": "migration"
-    },
-    {
-      "glob": "packages/3-mongo-target/1-mongo-target/src/exports/control.ts",
-      "domain": "extensions",
-      "layer": "targets",
-      "plane": "migration"
-    },
-    {
-      "glob": "packages/3-mongo-target/1-mongo-target/src/exports/pack.ts",
-      "domain": "extensions",
-      "layer": "targets",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/3-mongo-target/1-mongo-target/src/exports/runtime.ts",
-      "domain": "extensions",
-      "layer": "targets",
-      "plane": "runtime"
-    },
-    {
-      "glob": "packages/3-mongo-target/2-mongo-adapter/src/core/**",
-      "domain": "targets",
-      "layer": "adapters",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/3-mongo-target/2-mongo-adapter/src/exports/control.ts",
-      "domain": "targets",
-      "layer": "adapters",
-      "plane": "migration"
-    },
-    {
-      "glob": "packages/3-mongo-target/2-mongo-adapter/src/exports/index.ts",
-      "domain": "targets",
-      "layer": "adapters",
-      "plane": "runtime"
-    },
-    {
-      "glob": "packages/3-mongo-target/2-mongo-adapter/src/exports/runtime.ts",
-      "domain": "targets",
-      "layer": "adapters",
-      "plane": "runtime"
-    },
-    {
-      "glob": "packages/3-mongo-target/3-mongo-driver/**",
-      "domain": "targets",
-      "layer": "drivers",
-      "plane": "runtime"
-    },
-    {
       "glob": "packages/2-surreal-family/1-foundation/**",
       "domain": "surreal",
       "layer": "foundation",
@@ -869,6 +749,126 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "runtime"
+    },
+    {
+      "glob": "packages/2-mongo-family/2-authoring/**",
+      "domain": "mongo",
+      "layer": "authoring",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/2-mongo-family/3-tooling/emitter/**",
+      "domain": "mongo",
+      "layer": "tooling",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/2-mongo-family/3-tooling/mongo-schema-ir/**",
+      "domain": "mongo",
+      "layer": "tooling",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/2-mongo-family/4-query/**",
+      "domain": "mongo",
+      "layer": "query",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/2-mongo-family/5-query-builders/orm/**",
+      "domain": "mongo",
+      "layer": "query-builders",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/2-mongo-family/5-query-builders/pipeline-builder/**",
+      "domain": "mongo",
+      "layer": "query-builders",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/2-mongo-family/6-transport/**",
+      "domain": "mongo",
+      "layer": "transport",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/2-mongo-family/7-runtime/**",
+      "domain": "mongo",
+      "layer": "runtime",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/2-mongo-family/9-family/src/core/**",
+      "domain": "mongo",
+      "layer": "family",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/2-mongo-family/9-family/src/exports/control.ts",
+      "domain": "mongo",
+      "layer": "family",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-mongo-target/1-mongo-target/src/core/*.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-mongo-target/1-mongo-target/src/core/migrations/**",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-mongo-target/1-mongo-target/src/exports/control.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-mongo-target/1-mongo-target/src/exports/pack.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-mongo-target/1-mongo-target/src/exports/runtime.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-mongo-target/2-mongo-adapter/src/core/**",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-mongo-target/2-mongo-adapter/src/exports/control.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-mongo-target/2-mongo-adapter/src/exports/index.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-mongo-target/2-mongo-adapter/src/exports/runtime.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-mongo-target/3-mongo-driver/**",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "runtime"
     }
   ],
   "rules": {
@@ -885,94 +885,47 @@
       "reason": "Framework domain is the innermost/core domain and may not import from any other domain"
     },
     "sql": {
-      "mayImportFrom": [
-        "framework"
-      ],
+      "mayImportFrom": ["framework"],
       "reason": "SQL domain may import only from framework domain"
     },
     "mongo": {
-      "mayImportFrom": [
-        "framework"
-      ],
+      "mayImportFrom": ["framework"],
       "reason": "Mongo domain may import only from framework domain"
     },
+    "surreal": {
+      "mayImportFrom": ["framework"],
+      "reason": "SurrealDB domain may import only from framework domain"
+    },
     "targets": {
-      "mayImportFrom": [
-        "framework",
-        "sql",
-        "mongo",
-        "surreal"
-      ],
+      "mayImportFrom": ["framework", "sql", "mongo", "surreal"],
       "reason": "Targets domain may import from framework, sql, mongo, and surreal domains"
     },
     "extensions": {
-      "mayImportFrom": [
-        "framework",
-        "sql",
-        "mongo",
-        "surreal",
-        "targets",
-        "extensions"
-      ],
+      "mayImportFrom": ["framework", "sql", "mongo", "surreal", "targets", "extensions"],
       "reason": "Extensions domain may import from any domain"
-    },
-    "surreal": {
-      "mayImportFrom": [
-        "framework"
-      ],
-      "reason": "SurrealDB domain may import only from framework domain"
     }
   },
   "planeRules": {
     "shared": {
-      "allow": [
-        "shared"
-      ],
-      "forbid": [
-        "migration",
-        "runtime"
-      ],
+      "allow": ["shared"],
+      "forbid": ["migration", "runtime"],
       "exceptions": []
     },
     "migration": {
-      "allow": [
-        "shared",
-        "migration"
-      ],
-      "forbid": [
-        "runtime"
-      ],
+      "allow": ["shared", "migration"],
+      "forbid": ["runtime"],
       "exceptions": []
     },
     "runtime": {
-      "allow": [
-        "shared",
-        "runtime"
-      ],
-      "forbid": [
-        "migration"
-      ],
+      "allow": ["shared", "runtime"],
+      "forbid": ["migration"],
       "exceptions": []
     }
   },
   "crossDomainExceptions": [],
   "layerOrder": {
-    "framework": [
-      "foundation",
-      "core",
-      "authoring",
-      "tooling"
-    ],
-    "sql": [
-      "core",
-      "authoring",
-      "tooling",
-      "lanes",
-      "runtime",
-      "adapters",
-      "drivers",
-      "family"
-    ],
+    "framework": ["foundation", "core", "authoring", "tooling"],
+    "sql": ["core", "authoring", "tooling", "lanes", "runtime", "adapters", "drivers", "family"],
     "mongo": [
       "foundation",
       "authoring",
