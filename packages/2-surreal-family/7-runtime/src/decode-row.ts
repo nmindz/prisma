@@ -3,8 +3,18 @@ import { runtimeError } from '@internal/framework-components/runtime';
 import type { SurrealFieldShape, SurrealResultShape } from '@internal/surreal-query-ast/plan';
 import { RecordId } from '@internal/surreal-value';
 
+/**
+ * A plain object, as a CBOR map or a JSON object decodes to.
+ *
+ * The prototype check is what keeps the value model out: under `cbor` a
+ * record link arrives as a `RecordId` and a timestamp as a `SurrealDatetime`,
+ * both of which are objects. Treating one as a fetched record would walk its
+ * class fields instead of the record's own.
+ */
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 async function decodeLeaf(
@@ -56,10 +66,11 @@ async function decodeField(
   codecs: CodecLookup,
   ctx: CodecCallContext,
 ): Promise<unknown> {
-  // SurrealDB renders both NONE and NULL as JSON null under the json
-  // subprotocol, so an absent field and an explicitly empty one are
-  // indistinguishable here. Neither is passed to a codec.
-  if (value === null || value === undefined) return null;
+  // Under `cbor` these stay apart: `NONE` decodes to `undefined` and `NULL`
+  // to `null`, so an absent optional reads as absent. Under `json` SurrealDB
+  // renders both as null and the distinction is simply not on the wire.
+  // Neither is passed to a codec.
+  if (value === null || value === undefined) return value;
   switch (shape.kind) {
     case 'unknown':
       return value;

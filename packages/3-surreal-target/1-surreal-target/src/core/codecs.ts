@@ -2,6 +2,7 @@ import type { JsonValue } from '@internal/contract/types';
 import type { Codec, CodecDescriptor, CodecTrait } from '@internal/framework-components/codec';
 import { CodecImpl } from '@internal/framework-components/codec';
 import {
+  isRecordId,
   RecordId,
   SurrealDatetime,
   SurrealDecimal,
@@ -27,6 +28,29 @@ import {
 } from './codec-ids';
 import { surrealTargetError } from './errors';
 
+/**
+ * The text inside a value-model wrapper, whichever copy of the class it came
+ * from.
+ *
+ * Each package bundles its own copy of the value model, so a `SurrealDatetime`
+ * built inside the driver's bundle is not an `instanceof` the class this
+ * bundle holds. Reading the text and re-wrapping with the local class is both
+ * a cheaper check and a stronger guarantee: the caller always receives an
+ * instance of the class its own bundle exports.
+ */
+function taggedText(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const text: unknown = Reflect.get(value, 'value');
+  return typeof text === 'string' ? text : undefined;
+}
+
+/** The same reading, for the byte-carrying wrapper. */
+function taggedBytes(value: unknown): Uint8Array | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const bytes: unknown = Reflect.get(value, 'value');
+  return bytes instanceof Uint8Array ? bytes : undefined;
+}
+
 function decodeFailed(codecId: string, wire: unknown, expected: string): never {
   throw surrealTargetError(
     'RUNTIME.CODEC_DECODE_FAILED',
@@ -38,10 +62,11 @@ function decodeFailed(codecId: string, wire: unknown, expected: string): never {
 /**
  * A codec that passes its value through untouched in both directions.
  *
- * Used for the SurrealQL types the `json` subprotocol already round-trips
- * faithfully: `string`, `bool`, `int`, `float`, `object`, `any`. Their
- * identity here is a claim about SurrealDB's own JSON conversion, and the
- * conformance tests are what hold it.
+ * Used for the SurrealQL types both subprotocols already round-trip
+ * faithfully: `string`, `bool`, `int`, `float`, `object`, `any`, and — under
+ * CBOR, where it arrives as a tagged value rather than as GeoJSON —
+ * `geometry`. Their identity here is a claim about SurrealDB's own
+ * conversion, and the conformance tests are what hold it.
  */
 class PassthroughCodec extends CodecImpl<string, readonly CodecTrait[], unknown, unknown> {
   override async encode(value: unknown): Promise<unknown> {
@@ -65,53 +90,67 @@ class PassthroughCodec extends CodecImpl<string, readonly CodecTrait[], unknown,
 }
 
 /**
- * A codec for a SurrealQL scalar the JSON protocol flattens to a string.
+ * A codec for a SurrealQL scalar that has no JSON counterpart.
  *
- * The wire form is the string SurrealDB sends; the application form is the
- * wrapper class that keeps the type distinguishable. Without the wrapper a
- * `datetime`, a `duration` and a plain `string` would be the same JS value,
- * and the lowerer could not tell which bind sites need a cast.
+ * Which wire form arrives depends on the subprotocol. Under `json` the value
+ * is flattened to a string and this codec re-tags it; under `cbor` it already
+ * arrives as the wrapper, carrying detail the string form does not have — a
+ * datetime keeps its nanoseconds — so it is passed through untouched rather
+ * than round-tripped through text and truncated.
+ *
+ * Either way the application sees the wrapper class. Without it a `datetime`,
+ * a `duration` and a plain `string` would be the same JS value, and the
+ * lowerer could not tell which bind sites need a cast on a JSON connection.
  */
-class TaggedStringCodec<T> extends CodecImpl<string, readonly CodecTrait[], string, T> {
-  readonly #wrap: (text: string) => T;
-  readonly #unwrap: (value: T) => string;
+class TaggedStringCodec<T extends { readonly value: string }> extends CodecImpl<
+  string,
+  readonly CodecTrait[],
+  string,
+  T
+> {
+  readonly #Wrapper: new (
+    text: string,
+  ) => T;
 
-  constructor(
-    descriptor: CodecDescriptor<void>,
-    wrap: (text: string) => T,
-    unwrap: (value: T) => string,
-  ) {
+  constructor(descriptor: CodecDescriptor<void>, Wrapper: new (text: string) => T) {
     super(descriptor);
-    this.#wrap = wrap;
-    this.#unwrap = unwrap;
+    this.#Wrapper = Wrapper;
   }
 
   override async encode(value: T): Promise<string> {
-    return this.#unwrap(value);
+    return value.value;
   }
 
-  override async decode(wire: string): Promise<T> {
-    if (typeof wire !== 'string') decodeFailed(this.id, wire, 'a string');
-    return this.#wrap(wire);
+  override async decode(wire: unknown): Promise<T> {
+    if (typeof wire === 'string') return new this.#Wrapper(wire);
+    const text = taggedText(wire);
+    if (text === undefined) decodeFailed(this.id, wire, 'a string');
+    return new this.#Wrapper(text);
   }
 
   override encodeJson(value: T): JsonValue {
-    return this.#unwrap(value);
+    return value.value;
   }
 
   override decodeJson(json: JsonValue): T {
     if (typeof json !== 'string') decodeFailed(this.id, json, 'a string');
-    return this.#wrap(json);
+    return new this.#Wrapper(json);
   }
 }
 
-/** `bytes` arrives as an array of octets under the JSON subprotocol. */
+/**
+ * `bytes` arrives as an array of octets under `json` and as a byte string
+ * under `cbor`, so both are accepted and reduced to the same `Uint8Array`.
+ */
 class BytesCodec extends CodecImpl<string, readonly CodecTrait[], readonly number[], Uint8Array> {
   override async encode(value: Uint8Array): Promise<readonly number[]> {
     return Array.from(value);
   }
 
-  override async decode(wire: readonly number[]): Promise<Uint8Array> {
+  override async decode(wire: unknown): Promise<Uint8Array> {
+    if (wire instanceof Uint8Array) return wire;
+    const bytes = taggedBytes(wire);
+    if (bytes !== undefined) return bytes;
     if (!Array.isArray(wire)) decodeFailed(SURREAL_BYTES_CODEC_ID, wire, 'an array of octets');
     return Uint8Array.from(wire);
   }
@@ -136,7 +175,7 @@ class BytesCodec extends CodecImpl<string, readonly CodecTrait[], readonly numbe
  */
 class RecordLinkCodec extends CodecImpl<string, readonly CodecTrait[], unknown, unknown> {
   override async encode(value: unknown): Promise<unknown> {
-    return value instanceof RecordId ? value.toString() : value;
+    return isRecordId(value) ? value.toString() : value;
   }
 
   override async decode(wire: unknown): Promise<unknown> {
@@ -145,7 +184,7 @@ class RecordLinkCodec extends CodecImpl<string, readonly CodecTrait[], unknown, 
   }
 
   override encodeJson(value: unknown): JsonValue {
-    if (value instanceof RecordId) return value.toString();
+    if (isRecordId(value)) return value.toString();
     return blindCast<
       JsonValue,
       'a link that is not a RecordId is the fetched record object SurrealDB sent, which arrived as JSON'
@@ -239,45 +278,25 @@ export const surrealCodecDescriptors: readonly SurrealCodecDescriptor[] = [
     SURREAL_DATETIME_CODEC_ID,
     EQUALITY_AND_ORDER,
     ['datetime'],
-    (descriptor) =>
-      new TaggedStringCodec(
-        descriptor,
-        (text) => new SurrealDatetime(text),
-        (value: SurrealDatetime) => value.value,
-      ),
+    (descriptor) => new TaggedStringCodec(descriptor, SurrealDatetime),
   ),
   new SimpleDescriptor(
     SURREAL_DECIMAL_CODEC_ID,
     NUMERIC,
     ['decimal'],
-    (descriptor) =>
-      new TaggedStringCodec(
-        descriptor,
-        (text) => new SurrealDecimal(text),
-        (value: SurrealDecimal) => value.value,
-      ),
+    (descriptor) => new TaggedStringCodec(descriptor, SurrealDecimal),
   ),
   new SimpleDescriptor(
     SURREAL_DURATION_CODEC_ID,
     EQUALITY_AND_ORDER,
     ['duration'],
-    (descriptor) =>
-      new TaggedStringCodec(
-        descriptor,
-        (text) => new SurrealDuration(text),
-        (value: SurrealDuration) => value.value,
-      ),
+    (descriptor) => new TaggedStringCodec(descriptor, SurrealDuration),
   ),
   new SimpleDescriptor(
     SURREAL_UUID_CODEC_ID,
     EQUALITY_AND_ORDER,
     ['uuid'],
-    (descriptor) =>
-      new TaggedStringCodec(
-        descriptor,
-        (text) => new SurrealUuid(text),
-        (value: SurrealUuid) => value.value,
-      ),
+    (descriptor) => new TaggedStringCodec(descriptor, SurrealUuid),
   ),
   new SimpleDescriptor(
     SURREAL_BYTES_CODEC_ID,

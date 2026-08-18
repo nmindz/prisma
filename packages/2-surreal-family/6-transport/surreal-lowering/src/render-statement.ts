@@ -2,6 +2,7 @@ import { quoteIdentifier } from '@internal/surreal-contract';
 import type {
   Assignment,
   InsertStatement,
+  LiveSelectStatement,
   MutationPayload,
   ReturnClause,
   SelectStatement,
@@ -242,6 +243,38 @@ function renderRelate(
   ]);
 }
 
+/**
+ * Renders `LIVE SELECT`.
+ *
+ * The table is a bare name rather than a target: SurrealDB accepts only a
+ * table here, and rejects a record id or a subquery — a live query watches a
+ * table, and a single record is expressed as a `WHERE` on `id`.
+ */
+function renderLiveSelect(statement: LiveSelectStatement, ctx: RenderContext): string {
+  const head =
+    statement.diff === true
+      ? 'LIVE SELECT DIFF'
+      : statement.value === true
+        ? 'LIVE SELECT VALUE'
+        : 'LIVE SELECT';
+  const projections =
+    statement.diff === true
+      ? ''
+      : statement.projections === undefined || statement.projections.length === 0
+        ? '*'
+        : renderProjections(statement.projections, ctx);
+  return join([
+    head,
+    projections,
+    'FROM',
+    quoteIdentifier(statement.from),
+    statement.where === undefined ? '' : `WHERE ${renderExpr(statement.where, ctx, 'predicate')}`,
+    statement.fetch === undefined || statement.fetch.length === 0
+      ? ''
+      : `FETCH ${statement.fetch.map((expr) => renderExpr(expr, ctx, 'predicate')).join(', ')}`,
+  ]);
+}
+
 /** Renders one statement to SurrealQL text. */
 export function renderStatement(statement: SurrealStatement, ctx: RenderContext): string {
   switch (statement.kind) {
@@ -263,6 +296,10 @@ export function renderStatement(statement: SurrealStatement, ctx: RenderContext)
       return `RETURN ${renderExpr(statement.expr, ctx, 'predicate')}`;
     case 'let':
       return `LET $${statement.name} = ${renderExpr(statement.expr, ctx, 'write')}`;
+    case 'live-select':
+      return renderLiveSelect(statement, ctx);
+    case 'kill':
+      return `KILL ${renderExpr(statement.liveId, ctx, 'predicate')}`;
     case 'raw-statement':
       return statement.parts
         .map((part) => (part.kind === 'text' ? part.text : renderExpr(part.expr, ctx, 'predicate')))

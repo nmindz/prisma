@@ -37,7 +37,13 @@ function namespaceEntriesType(
   if (members.length === 0) return 'Record<string, never>';
   return `{ ${members
     .map(
-      ([name, entry]) => `readonly ${serializeObjectKey(name)}: ${tableEntryType(entry as object)}`,
+      ([name, entry]) =>
+        `readonly ${serializeObjectKey(name)}: ${tableEntryType(
+          blindCast<
+            object,
+            'a storage entry is an object by the time the contract schema has validated it'
+          >(entry),
+        )}`,
     )
     .join('; ')} }`;
 }
@@ -76,7 +82,10 @@ function validateSurrealTypes(contract: Contract): void {
 
   for (const [namespaceId, domain] of Object.entries(contract.domain.namespaces)) {
     for (const [modelName, model] of Object.entries(
-      domain.models as Record<string, ContractModel>,
+      blindCast<
+        Record<string, ContractModel>,
+        'the contract schema has already validated the domain namespace, so its models are ContractModel'
+      >(domain.models),
     )) {
       const qualified = `${namespaceId}:${modelName}`;
       if (typeof model.fields !== 'object' || model.fields === null) {

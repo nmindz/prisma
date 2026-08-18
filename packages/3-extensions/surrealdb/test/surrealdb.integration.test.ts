@@ -1,3 +1,4 @@
+import { RecordId } from '@internal/surreal-value';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import surrealdb from '../src/runtime/surrealdb';
 import { testConnection, testContractJson } from './support/contract';
@@ -93,10 +94,37 @@ describe.skipIf(!available)('surrealdb() against a live server', () => {
       expect(await rows(person.count({ where: { age: { gte: 44 } } }))).toEqual([{ count: 1 }]);
     });
 
+    // One round trip for three statements, and one transaction around them:
+    // the saving is the wait, which is what dominates off localhost.
+    it('runs several plans in one atomic round trip', async () => {
+      const [created, updated, listed] = await db.batch([
+        person.create({ id: 'batch1', data: { name: 'batch', age: 1 } }),
+        person.update({ id: 'batch1', data: { age: 2 }, merge: true }),
+        person.findUnique('batch1'),
+      ]);
+      expect(created).toEqual([{ id: new RecordId('person', 'batch1'), name: 'batch', age: 1 }]);
+      expect(updated).toEqual([{ id: new RecordId('person', 'batch1'), name: 'batch', age: 2 }]);
+      expect(listed).toEqual([{ id: new RecordId('person', 'batch1'), name: 'batch', age: 2 }]);
+    });
+
+    it('rolls the whole batch back when one statement fails', async () => {
+      await expect(
+        db.batch([
+          person.create({ id: 'batch2', data: { name: 'first', age: 1 } }),
+          person.create({ id: 'batch2', data: { name: 'again', age: 2 } }),
+        ]),
+      ).rejects.toThrow();
+      expect(await rows(person.findUnique('batch2'))).toEqual([]);
+    });
+
+    it('runs an empty batch without touching the server', async () => {
+      expect(await db.batch([])).toEqual([]);
+    });
+
     it('merges an update, leaving unlisted fields alone', async () => {
       await db.execute(person.update({ id: 'orm1', data: { age: 45 }, merge: true }));
       expect(await rows(person.findUnique('orm1'))).toEqual([
-        { id: 'person:orm1', name: 'orm', age: 45 },
+        { id: new RecordId('person', 'orm1'), name: 'orm', age: 45 },
       ]);
     });
 

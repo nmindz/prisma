@@ -13,11 +13,12 @@ import {
   RuntimeCore,
 } from '@internal/framework-components/runtime';
 import type { SurrealStorageShape } from '@internal/surreal-contract/types';
-import type { SurrealDriver } from '@internal/surreal-lowering';
+import type { SurrealDriver, SurrealLiveSubscription } from '@internal/surreal-lowering';
 import type { SurrealQueryPlan, SurrealResultShape } from '@internal/surreal-query-ast/plan';
 import { blindCast } from '@internal/utils/casts';
 import { computeSurrealContentHash } from './content-hash';
 import { decodeSurrealRow } from './decode-row';
+import { DecodingSubscription } from './decode-subscription';
 import type { SurrealExecutionContext, SurrealRuntimeAdapterInstance } from './surreal-context';
 import type { SurrealExecutionPlan } from './surreal-execution-plan';
 
@@ -38,6 +39,20 @@ export interface SurrealRuntime {
     options?: RuntimeExecuteOptions,
   ): AsyncIterableResult<Row>;
   execute(plan: SurrealQueryPlan, options?: RuntimeExecuteOptions): Promise<RuntimeStatementStats>;
+  /**
+   * Runs several plans as one atomic request, in a single round trip.
+   *
+   * Each plan's rows come back decoded against its own result shape, in the
+   * order the plans were given. The whole batch is one SurrealDB transaction:
+   * if any statement fails, none of them take effect.
+   */
+  batch(plans: readonly SurrealQueryPlan[]): Promise<readonly (readonly unknown[])[]>;
+  /**
+   * Opens a live query. Notifications are decoded against the plan's result
+   * shape exactly as rows are, so a subscriber sees the same record types a
+   * `findMany` would give it.
+   */
+  live<Row>(plan: SurrealQueryPlan<Row>): Promise<SurrealLiveSubscription<Row>>;
   close(): Promise<void>;
 }
 
@@ -147,6 +162,39 @@ class SurrealRuntimeImpl
       }
     }
     return new AsyncIterableResult(decoded());
+  }
+
+  async batch(plans: readonly SurrealQueryPlan[]): Promise<readonly (readonly unknown[])[]> {
+    if (plans.length === 0) return [];
+    const lowered = await this.#adapter.lowerBatch(plans, {});
+    const vars: Record<string, unknown> = {};
+    for (const param of lowered.params) vars[param.name] = param.value;
+    const envelopes = await this.#driver.batch(
+      { surql: lowered.surql, vars },
+      lowered.resultIndices,
+    );
+    return Promise.all(
+      envelopes.map(async (rows, index) => {
+        const shape = plans[index]?.resultShape;
+        if (shape === undefined || shape.kind === 'unknown') return rows;
+        return Promise.all(
+          rows.map((row) => decodeSurrealRow(row, shape, this.#context.codecs, {})),
+        );
+      }),
+    );
+  }
+
+  async live<Row>(plan: SurrealQueryPlan<Row>): Promise<SurrealLiveSubscription<Row>> {
+    const exec = await this.lower(plan, {});
+    const subscription = await this.#driver.live<Record<string, unknown>>(this.#request(exec));
+    const shape = plan.resultShape;
+    if (shape === undefined || shape.kind === 'unknown') {
+      return blindCast<
+        SurrealLiveSubscription<Row>,
+        'a plan with no result shape yields undecoded records, which is the raw lane contract the caller opted into'
+      >(subscription);
+    }
+    return new DecodingSubscription<Row>(subscription, shape, this.#context.codecs);
   }
 
   override async close(): Promise<void> {

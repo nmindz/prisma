@@ -1,6 +1,7 @@
 import type {
   OrderTerm,
   Projection,
+  RecordIdKey,
   SurrealExpr,
   SurrealQuery,
   SurrealStatement,
@@ -28,16 +29,29 @@ export interface FindManyArgs {
   readonly fetch?: readonly string[];
 }
 
+/**
+ * A live subscription's shape. Narrower than `FindManyArgs` because SurrealDB
+ * accepts no ordering, paging or grouping on a `LIVE SELECT`: a notification
+ * describes one record, so there is nothing to order or page.
+ */
+export interface LiveArgs {
+  readonly where?: WhereInput;
+  readonly select?: SelectInput;
+  readonly fetch?: readonly string[];
+  /** `LIVE SELECT DIFF` — notifications carry a JSON Patch, not the record. */
+  readonly diff?: boolean;
+}
+
 export interface CreateArgs {
   readonly data: Readonly<Record<string, unknown>>;
   /** A specific record id, rather than one SurrealDB generates. */
-  readonly id?: string;
+  readonly id?: RecordKeyInput;
   readonly select?: SelectInput;
 }
 
 export interface UpdateArgs {
   readonly where?: WhereInput;
-  readonly id?: string;
+  readonly id?: RecordKeyInput;
   readonly data: Readonly<Record<string, unknown>>;
   /** `MERGE` keeps unlisted fields; the default `CONTENT` replaces the record. */
   readonly merge?: boolean;
@@ -46,7 +60,7 @@ export interface UpdateArgs {
 
 export interface DeleteArgs {
   readonly where?: WhereInput;
-  readonly id?: string;
+  readonly id?: RecordKeyInput;
 }
 
 export interface RelateArgs {
@@ -116,10 +130,37 @@ function contentOf(data: Readonly<Record<string, unknown>>, params: ParamAllocat
   return obj(entries);
 }
 
-function targetFor(table: string, id: string | undefined) {
+/**
+ * A record id as a caller supplies it: the key on its own, or a whole
+ * `RecordId`.
+ *
+ * The `RecordId` form matters because reads hand one back — `row.id` is a
+ * `RecordId` — so anything that identifies a record has to accept what a read
+ * just produced, without the caller taking it apart first.
+ */
+export type RecordKeyInput = string | number | RecordId;
+
+function keyFor(table: string, id: RecordKeyInput): RecordIdKey {
+  if (typeof id === 'string') return { kind: 'identifier', name: id };
+  if (typeof id === 'number') return { kind: 'number', value: id };
+  if (id.tableName !== table) {
+    throw structuredError(
+      'RUNTIME.AST_INVALID',
+      `Record id ${String(id)} belongs to table "${id.tableName}", not "${table}"`,
+      { meta: { expected: table, actual: id.tableName } },
+    );
+  }
+  if (typeof id.id === 'string') return { kind: 'identifier', name: id.id };
+  if (typeof id.id === 'number') return { kind: 'number', value: id.id };
+  // A complex key — an array or an object — has no identifier spelling, so it
+  // goes through `type::record`, which takes the key as a value.
+  return { kind: 'expr', expr: { kind: 'record-id', recordId: id } };
+}
+
+function targetFor(table: string, id: RecordKeyInput | undefined) {
   return id === undefined
     ? ({ kind: 'table', name: table } as const)
-    : ({ kind: 'record', table, id: { kind: 'identifier', name: id } } as const);
+    : ({ kind: 'record', table, id: keyFor(table, id) } as const);
 }
 
 /**
@@ -196,13 +237,40 @@ export class SurrealCollection<Row = Record<string, unknown>> {
     );
   }
 
+  /**
+   * Compiles a `LIVE SELECT`, whose plan opens a subscription rather than
+   * returning rows. The `WHERE` runs on the server against each change, so a
+   * filtered subscription costs the client nothing.
+   */
+  live(args: LiveArgs = {}): SurrealQueryPlan<Row> {
+    const params = new ParamAllocator();
+    const where = compileWhere(args.where, params);
+    const fetch = (args.fetch ?? []).map((name) => field(name));
+    return plan<Row>(
+      [
+        {
+          kind: 'live-select',
+          from: this.#table,
+          ...(args.diff === true ? { diff: true } : { projections: selectFor(args) }),
+          ...(where === undefined ? {} : { where }),
+          ...(fetch.length === 0 ? {} : { fetch }),
+        },
+      ],
+      this.#storageHash,
+      this.#resultShape,
+    );
+  }
+
   /** `findMany` capped at one row. */
   findFirst(args: Omit<FindManyArgs, 'limit'> = {}): SurrealQueryPlan<Row> {
     return this.findMany({ ...args, limit: 1 });
   }
 
   /** Reads one record by id, using `FROM ONLY` so SurrealDB returns a record. */
-  findUnique(id: string, args: Pick<FindManyArgs, 'select' | 'fetch'> = {}): SurrealQueryPlan<Row> {
+  findUnique(
+    id: RecordKeyInput,
+    args: Pick<FindManyArgs, 'select' | 'fetch'> = {},
+  ): SurrealQueryPlan<Row> {
     const fetch = (args.fetch ?? []).map((name) => field(name));
     return plan<Row>(
       [

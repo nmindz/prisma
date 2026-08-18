@@ -103,3 +103,72 @@ describe('createSurrealAdapter', () => {
     expect(Object.isFrozen(lowered.params)).toBe(true);
   });
 });
+
+describe('lowering several plans into one batch', () => {
+  const adapter = createSurrealAdapter(lookupWith({}));
+
+  it('wraps the statements in a transaction, so all or none take effect', async () => {
+    const lowered = await adapter.lowerBatch(
+      [selectWhere(param('p0', 1)), selectWhere(param('p0', 2))],
+      {},
+    );
+    expect(lowered.surql.startsWith('BEGIN TRANSACTION;')).toBe(true);
+    expect(lowered.surql.endsWith('COMMIT TRANSACTION')).toBe(true);
+  });
+
+  // Both plans number their own parameters from zero, so a shared namespace
+  // would have the second silently overwrite the first.
+  it('keeps each plan’s parameters apart', async () => {
+    const lowered = await adapter.lowerBatch(
+      [selectWhere(param('p0', 1)), selectWhere(param('p0', 2))],
+      {},
+    );
+    expect(lowered.params).toEqual([
+      { name: 'b0_p0', value: 1 },
+      { name: 'b1_p0', value: 2 },
+    ]);
+    expect(lowered.surql).toContain('$b0_p0');
+    expect(lowered.surql).toContain('$b1_p0');
+  });
+
+  // BEGIN takes envelope 0, so the first plan's answer is envelope 1.
+  it('maps each plan to the envelope that answers it', async () => {
+    const lowered = await adapter.lowerBatch(
+      [selectWhere(param('p0', 1)), selectWhere(param('p0', 2))],
+      {},
+    );
+    expect(lowered.resultIndices).toEqual([1, 2]);
+  });
+
+  it('counts every statement of a multi-statement plan', async () => {
+    const two: SurrealQueryPlan = {
+      query: {
+        statements: [
+          { kind: 'let', name: 'x', expr: lit(1) },
+          selectWhere(param('p0', 1)).query.statements[0] ?? { kind: 'return', expr: lit(1) },
+        ],
+      },
+      meta,
+    };
+    const lowered = await adapter.lowerBatch([two, selectWhere(param('p0', 2))], {});
+    expect(lowered.resultIndices).toEqual([2, 3]);
+  });
+
+  it('lowers an empty batch to nothing to run', async () => {
+    const lowered = await adapter.lowerBatch([], {});
+    expect(lowered.resultIndices).toEqual([]);
+  });
+
+  it('encodes each plan’s values through its codec', async () => {
+    const withCodec = createSurrealAdapter(
+      lookupWith({ 'surrealdb/decimal@1': (value) => `<${String(value)}>` }),
+    );
+    const lowered = await withCodec.lowerBatch(
+      [selectWhere(param('p0', '1.5', { codecId: 'surrealdb/decimal@1' }))],
+      {},
+    );
+    expect(lowered.params).toEqual([
+      { name: 'b0_p0', value: '<1.5>', codecId: 'surrealdb/decimal@1' },
+    ]);
+  });
+});

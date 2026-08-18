@@ -1,6 +1,11 @@
 import type { CodecCallContext, CodecLookup } from '@internal/framework-components/codec';
 import { runtimeError } from '@internal/framework-components/runtime';
-import type { LoweredParam, LoweredSurrealQuery, SurrealAdapter } from '@internal/surreal-lowering';
+import type {
+  LoweredParam,
+  LoweredSurrealBatch,
+  LoweredSurrealQuery,
+  SurrealAdapter,
+} from '@internal/surreal-lowering';
 import { lowerQuery } from '@internal/surreal-lowering';
 import type { SurrealQueryPlan } from '@internal/surreal-query-ast/plan';
 
@@ -27,6 +32,39 @@ class SurrealAdapterImpl implements SurrealAdapter {
     const lowered = lowerQuery(plan.query);
     const params = await Promise.all(lowered.params.map((param) => this.#encode(param, ctx)));
     return { surql: lowered.surql, params: Object.freeze(params) };
+  }
+
+  async lowerBatch(
+    plans: readonly SurrealQueryPlan[],
+    ctx: CodecCallContext,
+  ): Promise<LoweredSurrealBatch> {
+    // Each plan numbers its parameters from zero, so every one is lowered
+    // under its own prefix; without that, two plans would both bind `$p0`.
+    const lowered = plans.map((plan, index) =>
+      lowerQuery(plan.query, { paramPrefix: `b${index}_` }),
+    );
+    const params = await Promise.all(
+      lowered.flatMap((entry) => entry.params).map((param) => this.#encode(param, ctx)),
+    );
+
+    // `BEGIN` is envelope 0, so the first plan's first statement is envelope
+    // 1. A plan may carry several statements; its answer is its last.
+    const resultIndices: number[] = [];
+    let envelope = 1;
+    for (const plan of plans) {
+      envelope += plan.query.statements.length;
+      resultIndices.push(envelope - 1);
+    }
+
+    return {
+      surql: [
+        'BEGIN TRANSACTION',
+        ...lowered.map((entry) => entry.surql),
+        'COMMIT TRANSACTION',
+      ].join(';\n'),
+      params: Object.freeze(params),
+      resultIndices: Object.freeze(resultIndices),
+    };
   }
 
   async #encode(param: LoweredParam, ctx: CodecCallContext): Promise<LoweredParam> {

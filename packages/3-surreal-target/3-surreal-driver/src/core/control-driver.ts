@@ -45,6 +45,14 @@ export class SurrealControlDriver implements SurrealControlDriverInstance {
     return { affectedRows: rows.length };
   }
 
+  async batch(
+    request: SurrealExecuteRequest,
+    resultIndices: readonly number[],
+  ): Promise<readonly (readonly unknown[])[]> {
+    const response = await this.#rpc.call('query', [request.surql, request.vars ?? {}]);
+    return resultIndices.map((index) => envelopeRows(selectEnvelope(response, index)));
+  }
+
   async databaseName(): Promise<string | undefined> {
     return this.#binding.database;
   }

@@ -1,4 +1,5 @@
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
+import { isRecordId } from '@internal/surreal-value';
 import { structuredError } from '@internal/utils/structured-error';
 import { LEDGER_TABLE, MARKER_TABLE } from './control-tables';
 
@@ -58,16 +59,19 @@ function optionalString(row: Record<string, unknown>, key: string): string | nul
 }
 
 /**
- * SurrealDB returns a `datetime` as an RFC 3339 string under the `json`
- * subprotocol. A row whose timestamp is unreadable is treated as epoch rather
- * than rejected: the marker's identity is its hashes, and refusing to read a
- * marker over a malformed timestamp would strand a database that is otherwise
- * fine.
+ * A `datetime` arrives as an RFC 3339 string under `json` and as a datetime
+ * wrapper under `cbor`; both render to the same text, so both are read the
+ * same way.
+ *
+ * A row whose timestamp is unreadable is treated as epoch rather than
+ * rejected: the marker's identity is its hashes, and refusing to read a
+ * marker over a malformed timestamp would strand a database that is
+ * otherwise fine.
  */
 function readDate(row: Record<string, unknown>, key: string): Date {
   const value = row[key];
-  if (typeof value !== 'string') return new Date(0);
-  const parsed = new Date(value);
+  if (value === null || value === undefined) return new Date(0);
+  const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
 }
 
@@ -86,9 +90,17 @@ function toMarker(row: Record<string, unknown>): ContractMarkerRecord {
   };
 }
 
-/** The space a marker row belongs to, taken from its record id. */
+/**
+ * The space a marker row belongs to, taken from its record id.
+ *
+ * Under `cbor` the id arrives structured, so the space is simply its id part.
+ * Under `json` it is the text after the first colon, and SurrealDB brackets
+ * an id that is not a bare identifier — `marker:⟨my app⟩` — so the brackets
+ * come off.
+ */
 function spaceOf(row: Record<string, unknown>): string | undefined {
   const id = row['id'];
+  if (isRecordId(id)) return String(id.id);
   if (typeof id !== 'string') return undefined;
   const separator = id.indexOf(':');
   return separator === -1

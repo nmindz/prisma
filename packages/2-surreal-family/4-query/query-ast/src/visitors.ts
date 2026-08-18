@@ -187,6 +187,14 @@ export function walkStatement(statement: SurrealStatement, visit: Visit): void {
     case 'let':
       walkExpr(statement.expr, visit);
       return;
+    case 'live-select':
+      for (const projection of statement.projections ?? []) walkExpr(projection.expr, visit);
+      if (statement.where !== undefined) walkExpr(statement.where, visit);
+      walkAll(statement.fetch ?? [], visit);
+      return;
+    case 'kill':
+      walkExpr(statement.liveId, visit);
+      return;
     case 'raw-statement':
       for (const part of statement.parts) {
         if (part.kind === 'expr') walkExpr(part.expr, visit);

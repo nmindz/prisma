@@ -497,11 +497,45 @@ export interface RawStatement {
   )[];
 }
 
+/**
+ * `LIVE SELECT` — a standing query that pushes a notification whenever a
+ * matching record changes.
+ *
+ * It is a statement rather than a driver call because SurrealDB compiles it
+ * like any other: the `WHERE` runs server-side against each change, so a
+ * subscription that filters costs the client nothing. The statement's result
+ * is a live-query id, and notifications arrive afterwards on the same socket
+ * as frames carrying no request id at all.
+ *
+ * The projection is narrower than `SELECT`'s: SurrealDB accepts `*`, a `VALUE`
+ * projection, or `DIFF`, and no ordering, grouping or paging — a notification
+ * describes one record, so there is nothing to order or page.
+ */
+export interface LiveSelectStatement {
+  readonly kind: 'live-select';
+  /** `LIVE SELECT DIFF` sends a JSON Patch array instead of the record. */
+  readonly diff?: boolean;
+  readonly projections?: readonly Projection[];
+  /** `LIVE SELECT VALUE x` — a bare value per notification. */
+  readonly value?: boolean;
+  readonly from: string;
+  readonly where?: SurrealExpr;
+  readonly fetch?: readonly SurrealExpr[];
+}
+
+/** `KILL` — ends a live query, by the id `LIVE SELECT` returned. */
+export interface KillStatement {
+  readonly kind: 'kill';
+  readonly liveId: SurrealExpr;
+}
+
 export type SurrealStatement =
   | CreateStatement
   | DeleteStatement
   | InsertStatement
+  | KillStatement
   | LetStatement
+  | LiveSelectStatement
   | RawStatement
   | RelateStatement
   | ReturnStatement

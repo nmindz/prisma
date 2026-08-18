@@ -1,3 +1,4 @@
+import type { BindPosition } from '@internal/surreal-codec';
 import {
   escapeStringLiteral,
   quoteIdentifier,

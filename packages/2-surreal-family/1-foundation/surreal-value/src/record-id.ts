@@ -1,3 +1,5 @@
+import { SURREAL_KIND, surrealKind } from './kind';
+
 /**
  * The identifier part of a SurrealDB record id — the piece after the colon in
  * `person:alice`.
@@ -28,6 +30,7 @@ export type RecordIdPart =
  * parameters were collected.
  */
 export class RecordId {
+  readonly [SURREAL_KIND] = 'record-id' as const;
   readonly tableName: string;
   readonly id: RecordIdPart;
 
@@ -62,6 +65,10 @@ export class RecordId {
   }
 }
 
+/**
+ * Recognises a record id from any copy of this module — see {@link SURREAL_KIND}
+ * for why `instanceof` cannot be used here.
+ */
 export function isRecordId(value: unknown): value is RecordId {
-  return value instanceof RecordId;
+  return surrealKind(value) === 'record-id';
 }

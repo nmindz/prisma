@@ -264,13 +264,16 @@ const SQL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
  *
  * `query-ast` carries the statement and expression nodes an application names
  * when it builds a plan by hand, and `lowering` the seam types a custom
- * driver implements. `schema-ir` is what code driving drift detection reads.
+ * driver implements. `cbor` is the wire encoding and its tag vocabulary, which
+ * a custom driver needs to speak the binary subprotocol. `schema-ir` is what
+ * code driving drift detection reads.
  */
 const SURREAL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
   { package: '@internal/surreal-contract-ts', entry: 'contract-ts' },
   { package: '@internal/surreal-orm', entry: 'orm' },
   { package: '@internal/surreal-query-ast', entry: 'query-ast' },
   { package: '@internal/surreal-lowering', entry: 'lowering' },
+  { package: '@internal/surreal-cbor', entry: 'cbor' },
   { package: '@internal/surreal-schema-ir', entry: 'schema-ir' },
   { package: '@internal/surreal-value', entry: 'value' },
   { package: '@internal/surreal-errors', entry: 'errors' },
@@ -528,6 +531,11 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           dir: 'packages/2-surreal-family/5-query-builders/orm',
           name: '@internal/surreal-orm',
           entry: 'orm',
+        },
+        {
+          dir: 'packages/2-surreal-family/6-transport/surreal-cbor',
+          name: '@internal/surreal-cbor',
+          entry: 'cbor',
         },
         {
           dir: 'packages/2-surreal-family/6-transport/surreal-lowering',
@@ -807,7 +815,11 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       dir: 'packages/9-public/@prisma/orm-surrealdb',
       kind: 'facade',
       packages: [
-        { dir: 'packages/3-extensions/surrealdb', name: '@internal/extension-surrealdb', entry: '' },
+        {
+          dir: 'packages/3-extensions/surrealdb',
+          name: '@internal/extension-surrealdb',
+          entry: '',
+        },
       ],
       reexports: facadeReexports({
         family: '@internal/surreal-contract',

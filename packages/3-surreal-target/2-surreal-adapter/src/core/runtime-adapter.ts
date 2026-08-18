@@ -37,6 +37,7 @@ const surrealRuntimeAdapterDescriptor: RuntimeAdapterDescriptor<
       familyId: 'surreal',
       targetId: 'surrealdb',
       lower: adapter.lower.bind(adapter),
+      lowerBatch: adapter.lowerBatch.bind(adapter),
     };
   },
 };

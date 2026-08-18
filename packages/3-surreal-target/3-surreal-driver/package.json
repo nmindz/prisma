@@ -19,6 +19,7 @@
   "dependencies": {
     "@internal/errors": "workspace:8.0.0-rc.3",
     "@internal/framework-components": "workspace:8.0.0-rc.3",
+    "@internal/surreal-cbor": "workspace:8.0.0-rc.3",
     "@internal/surreal-errors": "workspace:8.0.0-rc.3",
     "@internal/surreal-lowering": "workspace:8.0.0-rc.3",
     "@internal/utils": "workspace:8.0.0-rc.3"

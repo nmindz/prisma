@@ -1,3 +1,5 @@
+import { SURREAL_KIND, surrealKind } from './kind';
+
 /**
  * A placeholder for a value that travels beside the query text rather than
  * inside it.
@@ -9,6 +11,7 @@
  * the type the field expects.
  */
 export class SurrealParamRef {
+  readonly [SURREAL_KIND] = 'param-ref' as const;
   readonly value: unknown;
   readonly name: string | undefined;
   readonly codecId: string | undefined;
@@ -26,5 +29,5 @@ export class SurrealParamRef {
 }
 
 export function isParamRef(value: unknown): value is SurrealParamRef {
-  return value instanceof SurrealParamRef;
+  return surrealKind(value) === 'param-ref';
 }

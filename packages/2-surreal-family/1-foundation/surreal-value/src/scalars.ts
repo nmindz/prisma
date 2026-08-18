@@ -1,3 +1,5 @@
+import { SURREAL_KIND, type SurrealValueKind } from './kind';
+
 /**
  * SurrealQL scalar types that JSON cannot represent on its own.
  *
@@ -14,11 +16,8 @@
  * parameters are collected once and must not change afterwards.
  */
 abstract class TaggedScalar<TValue> {
-  readonly value: TValue;
-
-  protected constructor(value: TValue) {
-    this.value = value;
-  }
+  abstract readonly value: TValue;
+  abstract readonly [SURREAL_KIND]: SurrealValueKind;
 
   toString(): string {
     return String(this.value);
@@ -29,16 +28,63 @@ abstract class TaggedScalar<TValue> {
   }
 }
 
-/** An RFC 3339 instant. Carries the ISO-8601 text SurrealDB round-trips. */
+/**
+ * An RFC 3339 instant, held as the `[seconds, nanoseconds]` pair SurrealDB
+ * stores rather than as text.
+ *
+ * Parts rather than a string for two reasons. Nanoseconds survive: a JS `Date`
+ * rounds to milliseconds, so anything that passed through one would silently
+ * drop the last six digits SurrealDB keeps. And the text is only formatted if
+ * something asks for it — decoding a page of rows built a formatted string per
+ * timestamp that most callers never read, which measured as roughly a third of
+ * the decoder's whole cost.
+ */
 export class SurrealDatetime extends TaggedScalar<string> {
-  constructor(value: string | Date) {
-    super(value instanceof Date ? value.toISOString() : value);
+  readonly [SURREAL_KIND] = 'datetime' as const;
+  readonly seconds: number;
+  readonly nanos: number;
+  #text: string | undefined;
+
+  constructor(value: string | Date | readonly [seconds: number, nanos: number]) {
+    super();
+    const [seconds, nanos] = partsOf(value);
+    this.seconds = seconds;
+    this.nanos = nanos;
+    if (typeof value === 'string') this.#text = value;
+    // A private field stays writable through `Object.freeze`, which is what
+    // lets the formatted text be filled in on first read.
     Object.freeze(this);
   }
 
-  toDate(): Date {
-    return new Date(this.value);
+  get value(): string {
+    this.#text ??= formatInstant(this.seconds, this.nanos);
+    return this.#text;
   }
+
+  toDate(): Date {
+    return new Date(this.seconds * 1000 + Math.floor(this.nanos / 1_000_000));
+  }
+}
+
+function partsOf(value: string | Date | readonly [number, number]): readonly [number, number] {
+  if (Array.isArray(value)) return [Number(value[0]), Number(value[1])];
+  const iso = value instanceof Date ? value.toISOString() : String(value);
+  const match = /^(.*?)(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$/.exec(iso);
+  const head = match?.[1] ?? iso;
+  const fraction = match?.[2];
+  const zone = match?.[3] ?? 'Z';
+  const milliseconds = Date.parse(`${head}${zone}`);
+  if (Number.isNaN(milliseconds)) return [Number.NaN, 0];
+  return [
+    Math.floor(milliseconds / 1000),
+    fraction === undefined ? 0 : Number(fraction.padEnd(9, '0').slice(0, 9)),
+  ];
+}
+
+function formatInstant(seconds: number, nanos: number): string {
+  const base = new Date(seconds * 1000).toISOString().slice(0, 19);
+  if (nanos === 0) return `${base}Z`;
+  return `${base}.${String(nanos).padStart(9, '0').replace(/0+$/, '')}Z`;
 }
 
 /**
@@ -46,24 +92,36 @@ export class SurrealDatetime extends TaggedScalar<string> {
  * a JS `number` is exactly the precision loss the type exists to prevent.
  */
 export class SurrealDecimal extends TaggedScalar<string> {
+  readonly [SURREAL_KIND] = 'decimal' as const;
+  readonly value: string;
+
   constructor(value: string | number | bigint) {
-    super(typeof value === 'string' ? value : String(value));
+    super();
+    this.value = typeof value === 'string' ? value : String(value);
     Object.freeze(this);
   }
 }
 
 /** A SurrealQL duration, in its compact text form (`1h30m`, `500ms`). */
 export class SurrealDuration extends TaggedScalar<string> {
+  readonly [SURREAL_KIND] = 'duration' as const;
+  readonly value: string;
+
   constructor(value: string) {
-    super(value);
+    super();
+    this.value = value;
     Object.freeze(this);
   }
 }
 
 /** A UUID, in canonical hyphenated text form. */
 export class SurrealUuid extends TaggedScalar<string> {
+  readonly [SURREAL_KIND] = 'uuid' as const;
+  readonly value: string;
+
   constructor(value: string) {
-    super(value);
+    super();
+    this.value = value;
     Object.freeze(this);
   }
 }
@@ -74,8 +132,12 @@ export class SurrealUuid extends TaggedScalar<string> {
  * converts at the boundary.
  */
 export class SurrealBytes extends TaggedScalar<Uint8Array> {
+  readonly [SURREAL_KIND] = 'bytes' as const;
+  readonly value: Uint8Array;
+
   constructor(value: Uint8Array) {
-    super(value);
+    super();
+    this.value = value;
     Object.freeze(this);
   }
 
@@ -97,12 +159,20 @@ export class SurrealGeometry extends TaggedScalar<{
   readonly coordinates?: unknown;
   readonly geometries?: unknown;
 }> {
+  readonly [SURREAL_KIND] = 'geometry' as const;
+  readonly value: {
+    readonly type: string;
+    readonly coordinates?: unknown;
+    readonly geometries?: unknown;
+  };
+
   constructor(value: {
     readonly type: string;
     readonly coordinates?: unknown;
     readonly geometries?: unknown;
   }) {
-    super(value);
+    super();
+    this.value = value;
     Object.freeze(this);
   }
 

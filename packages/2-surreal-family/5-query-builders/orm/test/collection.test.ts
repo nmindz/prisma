@@ -193,3 +193,36 @@ describe('graph', () => {
     ).toBe('SELECT `id`<-`follows`<-`person`.`name` AS `name` FROM `person`');
   });
 });
+
+describe('identifying a record', () => {
+  const people = new SurrealCollection('person', 'sh');
+
+  it('takes the key as text', () => {
+    expect(lowerQuery(people.findUnique('alice').query).surql).toBe(
+      'SELECT * FROM ONLY `person`:`alice`',
+    );
+  });
+
+  // A read hands back a RecordId, so one has to be accepted straight back.
+  it('takes a RecordId a read produced', () => {
+    expect(lowerQuery(people.findUnique(new RecordId('person', 'alice')).query).surql).toBe(
+      'SELECT * FROM ONLY `person`:`alice`',
+    );
+  });
+
+  it('keeps a numeric key numeric', () => {
+    expect(lowerQuery(people.findUnique(12).query).surql).toBe('SELECT * FROM ONLY `person`:12');
+  });
+
+  it('refuses a RecordId from another table rather than reading the wrong row', () => {
+    expect(() => people.findUnique(new RecordId('company', 'acme'))).toThrow(
+      /belongs to table "company", not "person"/,
+    );
+  });
+
+  it('routes a complex key through type::record', () => {
+    expect(lowerQuery(people.findUnique(new RecordId('person', ['a', 1])).query).surql).toContain(
+      'type::record(',
+    );
+  });
+});

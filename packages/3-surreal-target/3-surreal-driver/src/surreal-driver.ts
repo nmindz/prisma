@@ -5,12 +5,15 @@ import type {
   SurrealDriver,
   SurrealDriverState,
   SurrealExecuteRequest,
+  SurrealLiveSubscription,
   SurrealStatementStats,
   SurrealTransaction,
 } from '@internal/surreal-lowering';
+import type { SurrealUuid } from '@internal/surreal-value';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
-import type { SurrealBinding } from './binding';
+import type { SurrealBinding, SurrealTransactionId } from './binding';
+import { SurrealLiveSubscriptionImpl } from './live-subscription';
 import { envelopeRows, selectEnvelope } from './result-envelope';
 import { SurrealRpcClient } from './rpc-client';
 
@@ -25,7 +28,7 @@ const ALREADY_CONNECTED =
 async function runQuery(
   rpc: SurrealRpcClient,
   request: SurrealExecuteRequest,
-  txn: string | undefined,
+  txn: SurrealTransactionId | undefined,
 ): Promise<readonly unknown[]> {
   const response = await rpc.call('query', [request.surql, request.vars ?? {}], txn);
   return envelopeRows(selectEnvelope(response, request.resultIndex));
@@ -38,9 +41,9 @@ async function runQuery(
  */
 abstract class SurrealQueryableBase {
   protected readonly rpc: SurrealRpcClient;
-  protected readonly txn: string | undefined;
+  protected readonly txn: SurrealTransactionId | undefined;
 
-  constructor(rpc: SurrealRpcClient, txn?: string) {
+  constructor(rpc: SurrealRpcClient, txn?: SurrealTransactionId) {
     this.rpc = rpc;
     this.txn = txn;
   }
@@ -53,6 +56,40 @@ abstract class SurrealQueryableBase {
         'the driver returns whatever SurrealDB sent; the caller states the row type and the runtime decodes it against the plan result shape'
       >(row);
     }
+  }
+
+  /**
+   * Reads several envelopes from one request. `BEGIN` and `COMMIT` each take
+   * an envelope of their own, which is why the caller passes the indices
+   * rather than assuming statement *n* is envelope *n*.
+   */
+  async batch(
+    request: SurrealExecuteRequest,
+    resultIndices: readonly number[],
+  ): Promise<readonly (readonly unknown[])[]> {
+    const response = await this.rpc.call('query', [request.surql, request.vars ?? {}], this.txn);
+    return resultIndices.map((index) => envelopeRows(selectEnvelope(response, index)));
+  }
+
+  /**
+   * Opens a live query.
+   *
+   * The `LIVE SELECT` envelope's result is the subscription id, not rows, so
+   * this reads the envelope directly rather than going through `runQuery`.
+   * It is never sent inside a transaction: SurrealDB registers a live query
+   * against the session, and one opened inside an uncommitted transaction
+   * would have nothing to attach to.
+   */
+  async live<Row = Record<string, unknown>>(
+    request: SurrealExecuteRequest,
+  ): Promise<SurrealLiveSubscription<Row>> {
+    const response = await this.rpc.call('query', [request.surql, request.vars ?? {}]);
+    const envelope = selectEnvelope(response, request.resultIndex);
+    const liveId = envelope.result;
+    if (liveId === undefined || liveId === null) {
+      throw new InternalError('SurrealDB did not return a live query id from LIVE SELECT');
+    }
+    return new SurrealLiveSubscriptionImpl<Row>(this.rpc, liveId);
   }
 
   /**
@@ -97,11 +134,7 @@ class SurrealConnectionImpl extends SurrealQueryableBase implements SurrealConne
   }
 
   async beginTransaction(): Promise<SurrealTransaction> {
-    const txn = await this.rpc.call<string>('begin', []);
-    if (typeof txn !== 'string' || txn.length === 0) {
-      throw new InternalError('SurrealDB did not return a transaction id from begin');
-    }
-    return new SurrealTransactionImpl(this.rpc, txn);
+    return new SurrealTransactionImpl(this.rpc, transactionId(await this.rpc.call('begin', [])));
   }
 
   async release(): Promise<void> {
@@ -113,6 +146,30 @@ type DriverState =
   | { readonly kind: 'unbound' }
   | { readonly kind: 'connected'; readonly binding: SurrealBinding; readonly rpc: SurrealRpcClient }
   | { readonly kind: 'closed' };
+
+/**
+ * Reads the id `begin` answered with.
+ *
+ * `json` sends text and `cbor` sends a uuid, and the id is only ever echoed
+ * back in the `txn` envelope field — so it is kept in whichever form the
+ * server chose rather than flattened to text the server would re-parse.
+ *
+ * The uuid case is recognised by shape rather than by `instanceof`: each
+ * package bundles its own copy of the value model, so a uuid built inside the
+ * driver's bundle is not an instance of the class the caller's bundle holds,
+ * even though it is the same type. Shape is sufficient here because the id is
+ * opaque to this code.
+ */
+function transactionId(value: unknown): SurrealTransactionId {
+  if (typeof value === 'string' && value.length > 0) return value;
+  if (typeof value === 'object' && value !== null && String(value).length > 0) {
+    return blindCast<
+      SurrealUuid,
+      'begin answers with a uuid under the cbor protocol; the id is opaque here and travels back to the server untouched'
+    >(value);
+  }
+  throw new InternalError('SurrealDB did not return a transaction id from begin');
+}
 
 /**
  * The iterable `query` returns before `connect`. Written as an explicit
@@ -176,6 +233,26 @@ export class SurrealDriverImpl implements SurrealRuntimeDriver {
   async execute(request: SurrealExecuteRequest): Promise<SurrealStatementStats> {
     const { rpc } = this.#requireConnected();
     return new SurrealConnectionImpl(rpc, false).execute(request);
+  }
+
+  async batch(
+    request: SurrealExecuteRequest,
+    resultIndices: readonly number[],
+  ): Promise<readonly (readonly unknown[])[]> {
+    const { rpc } = this.#requireConnected();
+    return new SurrealConnectionImpl(rpc, false).batch(request, resultIndices);
+  }
+
+  /**
+   * Opens a live query on the driver's own socket, so notifications keep
+   * arriving for as long as the driver is connected rather than only while a
+   * borrowed connection is held.
+   */
+  async live<Row = Record<string, unknown>>(
+    request: SurrealExecuteRequest,
+  ): Promise<SurrealLiveSubscription<Row>> {
+    const { rpc } = this.#requireConnected();
+    return new SurrealConnectionImpl(rpc, false).live<Row>(request);
   }
 
   async close(): Promise<void> {

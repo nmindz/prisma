@@ -1,5 +1,6 @@
 export { computeSurrealContentHash } from '../content-hash';
 export { decodeSurrealRow } from '../decode-row';
+export { DecodingSubscription } from '../decode-subscription';
 export type {
   SurrealExecutionContext,
   SurrealExecutionStack,

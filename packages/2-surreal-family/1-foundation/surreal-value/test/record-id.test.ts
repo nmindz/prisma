@@ -37,10 +37,23 @@ describe('RecordId', () => {
 });
 
 describe('tagged scalars', () => {
-  it('accepts a Date and keeps ISO text', () => {
+  // A whole second renders without a fraction, which is the form SurrealDB
+  // itself emits for the same instant.
+  it('accepts a Date', () => {
     expect(new SurrealDatetime(new Date('2024-01-02T03:04:05.000Z')).value).toBe(
-      '2024-01-02T03:04:05.000Z',
+      '2024-01-02T03:04:05Z',
     );
+  });
+
+  it('keeps the text it was given verbatim', () => {
+    expect(new SurrealDatetime('2024-01-02T03:04:05.000Z').value).toBe('2024-01-02T03:04:05.000Z');
+  });
+
+  it('keeps nanoseconds a Date would round away', () => {
+    const instant = new SurrealDatetime([1704164645, 123456789] as const);
+    expect(instant.value).toBe('2024-01-02T03:04:05.123456789Z');
+    expect(instant.nanos).toBe(123456789);
+    expect(instant.toDate().toISOString()).toBe('2024-01-02T03:04:05.123Z');
   });
 
   it('keeps decimals as text rather than routing them through a JS number', () => {

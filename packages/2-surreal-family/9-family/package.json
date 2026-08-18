@@ -22,6 +22,7 @@
     "@internal/surreal-contract": "workspace:8.0.0-rc.3",
     "@internal/surreal-emitter": "workspace:8.0.0-rc.3",
     "@internal/surreal-schema-ir": "workspace:8.0.0-rc.3",
+    "@internal/surreal-value": "workspace:8.0.0-rc.3",
     "@internal/utils": "workspace:8.0.0-rc.3"
   },
   "devDependencies": {

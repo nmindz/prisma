@@ -16,8 +16,20 @@ import { renderStatement } from './render-statement';
  * a cast would cost the index — see `BindPosition`. Identifiers are quoted;
  * every other character in the output was chosen by the builder.
  */
-export function lowerQuery(query: SurrealQuery): LoweredSurrealQuery {
+export interface LowerQueryOptions {
+  /**
+   * Prepended to every bound variable's name.
+   *
+   * Each plan numbers its own parameters from zero, so merging two into one
+   * batch would give both a `$p0` meaning different things. A per-plan prefix
+   * is what keeps them apart without rewriting either plan's AST.
+   */
+  readonly paramPrefix?: string;
+}
+
+export function lowerQuery(query: SurrealQuery, options?: LowerQueryOptions): LoweredSurrealQuery {
   const params = new Map<string, LoweredParam>();
+  const prefix = options?.paramPrefix ?? '';
 
   const ctx: RenderContext = {
     bind(param, position) {
@@ -25,14 +37,15 @@ export function lowerQuery(query: SurrealQuery): LoweredSurrealQuery {
       // `bindsAsNone`. No variable is registered for it: SurrealDB would
       // reject the value it carried.
       if (bindsAsNone(param.fieldType, param.value)) return 'NONE';
-      if (!params.has(param.name)) {
-        params.set(param.name, {
-          name: param.name,
+      const name = `${prefix}${param.name}`;
+      if (!params.has(name)) {
+        params.set(name, {
+          name,
           value: param.value,
           ...(param.codecId === undefined ? {} : { codecId: param.codecId }),
         });
       }
-      return applyBindCast(`$${param.name}`, param.fieldType, param.value, position);
+      return applyBindCast(`$${name}`, param.fieldType, param.value, position);
     },
     statement(statement: SurrealStatement) {
       return renderStatement(statement, ctx);

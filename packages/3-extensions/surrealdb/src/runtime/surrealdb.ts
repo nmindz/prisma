@@ -1,7 +1,7 @@
 import { assembleSurrealCodecLookup } from '@internal/adapter-surrealdb/codec-lookup';
 import surrealAdapter from '@internal/adapter-surrealdb/runtime';
 import type { Contract } from '@internal/contract/types';
-import type { SurrealBinding } from '@internal/driver-surrealdb/runtime';
+import type { SurrealBinding, SurrealWireProtocol } from '@internal/driver-surrealdb/runtime';
 import surrealDriver from '@internal/driver-surrealdb/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import type {
@@ -10,7 +10,11 @@ import type {
   RuntimeStatementStats,
 } from '@internal/framework-components/runtime';
 import type { SurrealStorageShape } from '@internal/surreal-contract/types';
-import type { SurrealConnection, SurrealTransaction } from '@internal/surreal-lowering';
+import type {
+  SurrealConnection,
+  SurrealLiveSubscription,
+  SurrealTransaction,
+} from '@internal/surreal-lowering';
 import { lowerQuery } from '@internal/surreal-lowering';
 import { orm as buildOrm, type SurrealOrm } from '@internal/surreal-orm';
 import type { SurrealQueryPlan } from '@internal/surreal-query-ast/plan';
@@ -39,6 +43,13 @@ export interface SurrealdbConnectionInput {
   readonly username?: string;
   readonly password?: string;
   readonly token?: string;
+  /**
+   * The websocket subprotocol. Defaults to `cbor`, under which SurrealDB's
+   * own types survive the round trip — `NONE` stays distinct from `NULL`, a
+   * datetime keeps its nanoseconds, and a record id arrives structured. Set
+   * `json` only for a proxy that cannot pass binary frames.
+   */
+  readonly protocol?: SurrealWireProtocol;
 }
 
 export interface SurrealdbOptionsBase extends SurrealdbConnectionInput {
@@ -82,6 +93,20 @@ export interface SurrealdbClient<TContract extends Contract<SurrealStorageShape>
     options?: RuntimeExecuteOptions,
   ): AsyncIterableResult<Row>;
   execute(plan: SurrealQueryPlan, options?: RuntimeExecuteOptions): Promise<RuntimeStatementStats>;
+  /**
+   * Runs several plans as one atomic request, in a single round trip.
+   *
+   * The saving is the round trip, which is what dominates once the database
+   * is not on localhost: three writes cost one wait rather than three. All of
+   * them commit or none do.
+   */
+  batch(plans: readonly SurrealQueryPlan[]): Promise<readonly (readonly unknown[])[]>;
+  /**
+   * Opens a live query from a `LIVE SELECT` plan — `db.orm.person.live(...)`,
+   * or a hand-built one. Connects first if the client is not connected yet,
+   * because a subscription is only meaningful over an open socket.
+   */
+  live<Row>(plan: SurrealQueryPlan<Row>): Promise<SurrealLiveSubscription<Row>>;
   connect(connection?: SurrealdbConnectionInput): Promise<SurrealRuntime>;
   runtime(): SurrealRuntime;
   transaction<R>(fn: (tx: SurrealdbTransactionContext<TContract>) => PromiseLike<R>): Promise<R>;
@@ -100,6 +125,7 @@ function resolveBinding(input: SurrealdbConnectionInput): SurrealBinding | undef
     ...(input.username === undefined ? {} : { username: input.username }),
     ...(input.password === undefined ? {} : { password: input.password }),
     ...(input.token === undefined ? {} : { token: input.token }),
+    ...(input.protocol === undefined ? {} : { protocol: input.protocol }),
   };
 }
 
@@ -250,6 +276,13 @@ export default function surrealdb<TContract extends Contract<SurrealStorageShape
     },
     execute(plan: SurrealQueryPlan, executeOptions?: RuntimeExecuteOptions) {
       return getRuntime().execute(plan, executeOptions);
+    },
+    async batch(plans: readonly SurrealQueryPlan[]): Promise<readonly (readonly unknown[])[]> {
+      return getRuntime().batch(plans);
+    },
+    async live<Row>(plan: SurrealQueryPlan<Row>): Promise<SurrealLiveSubscription<Row>> {
+      await ensureConnected();
+      return getRuntime().live(plan);
     },
     async connect(connection?: SurrealdbConnectionInput): Promise<SurrealRuntime> {
       if (closed) {

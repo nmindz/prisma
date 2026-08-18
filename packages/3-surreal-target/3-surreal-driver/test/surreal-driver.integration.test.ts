@@ -13,7 +13,7 @@ import {
   param,
   type SurrealQuery,
 } from '@internal/surreal-query-ast';
-import { RecordId } from '@internal/surreal-value';
+import { RecordId, SurrealDecimal } from '@internal/surreal-value';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SurrealDriverImpl } from '../src/surreal-driver';
 import { surrealAvailable, testBinding } from './support/surrealdb';
@@ -85,7 +85,7 @@ describe.skipIf(!available)('SurrealDB driver, against a live server', () => {
         },
       ],
     });
-    expect(created).toEqual([{ id: 'person:ada', name: 'ada', age: 36 }]);
+    expect(created).toEqual([{ id: new RecordId('person', 'ada'), name: 'ada', age: 36 }]);
   });
 
   it('binds a decimal through its cast, which a bare string would fail', async () => {
@@ -110,7 +110,14 @@ describe.skipIf(!available)('SurrealDB driver, against a live server', () => {
         },
       ],
     });
-    expect(rows).toEqual([{ id: 'person:ada', name: 'ada', age: 36, balance: '12.34' }]);
+    expect(rows).toEqual([
+      {
+        id: new RecordId('person', 'ada'),
+        name: 'ada',
+        age: 36,
+        balance: new SurrealDecimal('12.34'),
+      },
+    ]);
   });
 
   it('writes an absent optional as NONE, so the field is gone rather than null', async () => {
@@ -137,7 +144,7 @@ describe.skipIf(!available)('SurrealDB driver, against a live server', () => {
     });
     // NONE removes the field. SurrealDB keeps NONE (absent) and NULL
     // (present, empty) distinct, and `option<decimal>` admits only the former.
-    expect(rows).toEqual([{ id: 'person:ada', name: 'ada', age: 36 }]);
+    expect(rows).toEqual([{ id: new RecordId('person', 'ada'), name: 'ada', age: 36 }]);
   });
 
   it('filters, orders and pages with START rather than OFFSET', async () => {
@@ -284,7 +291,7 @@ describe.skipIf(!available)('SurrealDB driver, against a live server', () => {
       })) {
         written.push(row);
       }
-      expect(written).toEqual([{ id: 'person:tx', name: 'tx', age: 1 }]);
+      expect(written).toEqual([{ id: new RecordId('person', 'tx'), name: 'tx', age: 1 }]);
 
       const insideRows: unknown[] = [];
       for await (const row of transaction.query({ surql: 'SELECT * FROM person:tx' })) {
