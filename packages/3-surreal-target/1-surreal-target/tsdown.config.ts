@@ -2,6 +2,7 @@ import { defineConfig } from '@repo/tsdown';
 
 export default defineConfig({
   entry: {
+    control: 'src/exports/control.ts',
     pack: 'src/exports/pack.ts',
     runtime: 'src/exports/runtime.ts',
     schema: 'src/exports/schema.ts',

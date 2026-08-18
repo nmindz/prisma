@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash } from '@internal/contract/types';
+import type { ContractSerializer } from '@internal/framework-components/control';
 import type { SurrealNamespace } from '@internal/surreal-contract';
 import {
   buildSurrealNamespace,
@@ -9,6 +10,7 @@ import {
 } from '@internal/surreal-contract';
 import type { SurrealStorageShape } from '@internal/surreal-contract/types';
 import { blindCast } from '@internal/utils/casts';
+import type { JsonObject } from '@internal/utils/json';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktypeType } from 'arktype';
 
@@ -21,8 +23,12 @@ import { type as arktypeType } from 'arktype';
  * `record<person>` pointing at a table the contract never declares is
  * well-formed JSON and a broken contract.
  */
-export class SurrealContractSerializer {
-  deserializeContract(json: unknown): Contract<SurrealStorageShape> {
+export class SurrealContractSerializer
+  implements ContractSerializer<Contract<SurrealStorageShape>>
+{
+  deserializeContract<T extends Contract<SurrealStorageShape> = Contract<SurrealStorageShape>>(
+    json: unknown,
+  ): T {
     const validated = SurrealContractSchema(json);
     if (validated instanceof arktypeType.errors) {
       throw structuredError(
@@ -61,8 +67,8 @@ export class SurrealContractSerializer {
     });
 
     return blindCast<
-      Contract<SurrealStorageShape>,
-      'the envelope was validated against SurrealContractSchema and its storage block replaced with the hydrated IR; the remaining members are carried through unchanged'
+      T,
+      'the envelope was validated against SurrealContractSchema and its storage block replaced with the hydrated IR; the remaining members are carried through unchanged, and the caller states which precise contract type that JSON was emitted for'
     >({ ...envelope, storage });
   }
 
@@ -72,7 +78,10 @@ export class SurrealContractSerializer {
    * The IR classes are `JSON.stringify`-transparent: every field is an own
    * enumerable property, so the structured clone is the on-disk form.
    */
-  serializeContract(contract: Contract<SurrealStorageShape>): unknown {
-    return JSON.parse(JSON.stringify(contract));
+  serializeContract(contract: Contract<SurrealStorageShape>): JsonObject {
+    return blindCast<
+      JsonObject,
+      'the IR classes are JSON.stringify-transparent — every contract-bearing field is an own enumerable property, and the kind discriminators are installed non-enumerable for exactly this reason — so the structured clone is the canonical on-disk object'
+    >(JSON.parse(JSON.stringify(contract)));
   }
 }

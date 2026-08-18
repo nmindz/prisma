@@ -1,3 +1,6 @@
+export { surrealFamilyDescriptor } from '../core/control-descriptor';
+export type { SurrealControlFamilyInstance } from '../core/control-instance';
+export { createSurrealFamilyInstance } from '../core/control-instance';
 export {
   CONTROL_TABLE_DDL,
   LEDGER_TABLE,
