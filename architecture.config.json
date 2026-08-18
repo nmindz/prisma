@@ -649,6 +649,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/2-surreal-family/5-query-builders/**",
+      "domain": "surreal",
+      "layer": "query-builders",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/2-surreal-family/6-transport/**",
       "domain": "surreal",
       "layer": "transport",

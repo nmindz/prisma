@@ -37,6 +37,18 @@ await db.transaction(async (tx) => {
 });
 ```
 
+Or through the collection lane, which compiles the same plans:
+
+```ts
+await db.execute(db.orm.person.create({ data: { name: 'ada', age: 36 } }));
+
+for await (const row of db.query(
+  db.orm.person.findMany({ where: { age: { gte: 18 } }, orderBy: { age: 'desc' }, limit: 10 }),
+)) {
+  console.log(row);
+}
+```
+
 ## Interpolation is always a bind site
 
 `` db.surql`… ${value}` `` sends `$p0` and the value beside it. There is no

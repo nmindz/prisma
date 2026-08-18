@@ -12,6 +12,7 @@ import type {
 import type { SurrealStorageShape } from '@internal/surreal-contract/types';
 import type { SurrealConnection, SurrealTransaction } from '@internal/surreal-lowering';
 import { lowerQuery } from '@internal/surreal-lowering';
+import { orm as buildOrm, type SurrealOrm } from '@internal/surreal-orm';
 import type { SurrealQueryPlan } from '@internal/surreal-query-ast/plan';
 import type {
   SurrealExecutionContext,
@@ -71,6 +72,8 @@ export interface SurrealdbTransactionContext<TContract extends Contract<SurrealS
 
 export interface SurrealdbClient<TContract extends Contract<SurrealStorageShape>> {
   readonly surql: RawLane<TContract>;
+  /** One collection per table the contract declares. */
+  readonly orm: SurrealOrm<TContract>;
   readonly contract: TContract;
   readonly context: SurrealExecutionContext<TContract>;
   readonly stack: SurrealExecutionStack;
@@ -145,6 +148,7 @@ export default function surrealdb<TContract extends Contract<SurrealStorageShape
   };
 
   const surql = createRawLane<TContract>({ contract });
+  const collections = buildOrm<TContract>(contract);
 
   let runtimeInstance: SurrealRuntime | undefined;
   let driverInstance: ReturnType<typeof surrealDriver.create> | undefined;
@@ -237,6 +241,7 @@ export default function surrealdb<TContract extends Contract<SurrealStorageShape
 
   return {
     surql,
+    orm: collections,
     contract,
     context,
     stack,

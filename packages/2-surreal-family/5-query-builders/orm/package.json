@@ -1,11 +1,11 @@
 {
-  "name": "@internal/extension-surrealdb",
+  "name": "@internal/surreal-orm",
   "private": true,
   "version": "8.0.0-rc.3",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "User-facing SurrealDB client for Prisma 8",
+  "description": "Typed collection lane over a SurrealDB contract",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
@@ -17,18 +17,11 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/adapter-surrealdb": "workspace:8.0.0-rc.3",
     "@internal/contract": "workspace:8.0.0-rc.3",
-    "@internal/driver-surrealdb": "workspace:8.0.0-rc.3",
     "@internal/framework-components": "workspace:8.0.0-rc.3",
     "@internal/surreal-contract": "workspace:8.0.0-rc.3",
-    "@internal/surreal-errors": "workspace:8.0.0-rc.3",
-    "@internal/surreal-lowering": "workspace:8.0.0-rc.3",
-    "@internal/surreal-orm": "workspace:8.0.0-rc.3",
     "@internal/surreal-query-ast": "workspace:8.0.0-rc.3",
-    "@internal/surreal-runtime": "workspace:8.0.0-rc.3",
     "@internal/surreal-value": "workspace:8.0.0-rc.3",
-    "@internal/target-surrealdb": "workspace:8.0.0-rc.3",
     "@internal/utils": "workspace:8.0.0-rc.3"
   },
   "devDependencies": {
@@ -51,8 +44,9 @@
     "dist",
     "src"
   ],
+  "types": "./dist/index.d.mts",
   "exports": {
-    "./runtime": "./dist/runtime.mjs",
+    ".": "./dist/index.mjs",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -61,6 +55,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
-    "directory": "packages/3-extensions/surrealdb"
+    "directory": "packages/2-surreal-family/5-query-builders/orm"
   }
 }
