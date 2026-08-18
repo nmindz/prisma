@@ -1,6 +1,12 @@
 import type { SurrealFieldType } from '@internal/surreal-contract/types';
 import { describe, expect, it } from 'vitest';
-import { applyBindCast, bindCastFor, newSurrealCodecRegistry, surrealCodec } from '../src/exports/index';
+import {
+  applyBindCast,
+  bindCastFor,
+  bindsAsNone,
+  newSurrealCodecRegistry,
+  surrealCodec,
+} from '../src/exports/index';
 
 const datetime: SurrealFieldType = { kind: 'scalar', name: 'datetime' };
 const decimal: SurrealFieldType = { kind: 'scalar', name: 'decimal' };
@@ -53,6 +59,26 @@ describe('bindCastFor', () => {
     expect(
       bindCastFor({ kind: 'geometry', shapes: ['point'] }, { type: 'Point', coordinates: [1, 2] }),
     ).toBeUndefined();
+  });
+});
+
+describe('bindsAsNone', () => {
+  it('reports an absent optional, which SurrealDB stores as NONE not NULL', () => {
+    expect(bindsAsNone({ kind: 'option', of: decimal }, null)).toBe(true);
+    expect(bindsAsNone({ kind: 'option', of: decimal }, undefined)).toBe(true);
+  });
+
+  it('does not report a present optional', () => {
+    expect(bindsAsNone({ kind: 'option', of: decimal }, '1.5')).toBe(false);
+  });
+
+  it('leaves a non-optional null alone, so it lands as SurrealQL NULL', () => {
+    expect(bindsAsNone(decimal, null)).toBe(false);
+    expect(bindsAsNone(text, null)).toBe(false);
+  });
+
+  it('reports nothing when the field type is unknown', () => {
+    expect(bindsAsNone(undefined, null)).toBe(false);
   });
 });
 

@@ -20,6 +20,19 @@ cannot carry on its own:
 Everything here is frozen on construction and has no dependency on the rest of
 the workspace.
 
+## Responsibilities
+
+- `RecordId` — the `table:id` pair, parsed from and rendered to SurrealDB's
+  wire form.
+- The tagged scalars JSON cannot carry on its own.
+- `SurrealParamRef` — a named bind site.
+- The `SurrealValue` union everything above composes into.
+
+## Dependencies
+
+None. This package sits at the bottom of the family and depends on nothing in
+the workspace, so any layer can name these types without pulling anything in.
+
 ## Related
 
 - [`@internal/surreal-contract`](../surreal-contract) — the storage IR these

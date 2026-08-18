@@ -109,9 +109,7 @@ describe('validateSurrealTables', () => {
 
   it('accepts a vector index over a single field', () => {
     const table = new SurrealTable({
-      indexes: [
-        { name: 'vec', fields: ['embedding'], variant: { kind: 'mtree', dimension: 3 } },
-      ],
+      indexes: [{ name: 'vec', fields: ['embedding'], variant: { kind: 'mtree', dimension: 3 } }],
     });
     expect(() => validateSurrealTables({ table })).not.toThrow();
   });
@@ -139,9 +137,7 @@ describe('composeSurrealEntityKinds', () => {
 
   it('rejects a pack kind that collides with a built-in', () => {
     expect(() =>
-      composeSurrealEntityKinds([
-        { kind: 'table', schema: undefined, construct: () => undefined },
-      ]),
+      composeSurrealEntityKinds([{ kind: 'table', schema: undefined, construct: () => undefined }]),
     ).toThrow(/duplicate entity kind "table"/);
   });
 });

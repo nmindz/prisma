@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SurrealFieldType } from '../src/exports/types';
 import { renderSurrealType, unwrapOptional } from '../src/exports/index';
+import type { SurrealFieldType } from '../src/exports/types';
 
 describe('renderSurrealType', () => {
   it('renders a scalar as its bare name', () => {

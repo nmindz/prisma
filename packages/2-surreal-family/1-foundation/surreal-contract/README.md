@@ -41,6 +41,22 @@ by the contract: the same contract deploys to `staging` and `production`
 unchanged. So the contract is structurally single-namespace (the unbound one),
 as the Mongo family is, and the driver binding decides where it lands.
 
+## Responsibilities
+
+- The storage IR classes (`SurrealTable`, `SurrealField`, `SurrealIndex`,
+  `SurrealAnalyzer`, `SurrealStorage`) and their namespace hydration.
+- `SurrealContractSchema` — the arktype schema validating the JSON envelope.
+- `quoteIdentifier` / `escapeStringLiteral` / `renderSurrealType` — the
+  SurrealQL surface syntax of the type and identifier grammar.
+- `validateSurrealTables` — the cross-table invariants arktype cannot see.
+
+## Dependencies
+
+- `@internal/contract` and `@internal/framework-components` — the framework
+  contract envelope and IR base classes.
+- `@internal/surreal-value` — record ids referenced by link fields.
+- `arktype` — structural validation of the storage JSON.
+
 ## Related
 
 - [`@internal/surreal-value`](../surreal-value) — the runtime value types.

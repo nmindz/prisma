@@ -44,6 +44,23 @@ function castableType(type: SurrealFieldType): SurrealFieldType | undefined {
 }
 
 /**
+ * Whether an absent value should be written as the SurrealQL literal `NONE`
+ * rather than bound as a variable.
+ *
+ * SurrealDB's `option<T>` means `NONE | T` — not `NULL | T`. Writing JS
+ * `null` into an `option<decimal>` field fails outright: *Couldn't coerce
+ * value for field `balance`: Expected `none | decimal` but found `NULL`*. So
+ * an absent optional cannot travel as a bound `null`; it has to be the
+ * keyword, which is a property of the declared type rather than of the value.
+ *
+ * A field whose declared type is not `option<…>` keeps binding `null`, which
+ * SurrealDB stores as the distinct `NULL` value.
+ */
+export function bindsAsNone(type: SurrealFieldType | undefined, value: unknown): boolean {
+  return type?.kind === 'option' && (value === null || value === undefined);
+}
+
+/**
  * The SurrealQL cast a bind site needs for `type`, or `undefined` when the
  * JSON form already arrives as the right type.
  *

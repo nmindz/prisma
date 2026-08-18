@@ -31,6 +31,19 @@ Two rules are load-bearing and both are enforced here:
   object, so geometry parameters rely on SurrealDB coercing on write into a
   `SCHEMAFULL` field.
 
+## Responsibilities
+
+- `SurrealCodec` and the `surrealCodec(...)` factory.
+- `newSurrealCodecRegistry` — id-keyed lookup, duplicate-safe.
+- `bindCastFor` / `applyBindCast` / `bindsAsNone` — the bind-site rules.
+
+## Dependencies
+
+- `@internal/surreal-contract` — declared field types, which the cast rules
+  are derived from.
+- `@internal/surreal-value` — the value types being encoded.
+- `@internal/framework-components` — the framework `Codec` base.
+
 ## Related
 
 - [`@internal/surreal-value`](../surreal-value) — the value types being encoded.

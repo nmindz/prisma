@@ -22,7 +22,9 @@ describe('quoteIdentifier', () => {
   });
 
   it('leaves an injection attempt inert inside the quotes', () => {
-    expect(quoteIdentifier('a` ; REMOVE TABLE victim; --')).toBe('`a\\` ; REMOVE TABLE victim; --`');
+    expect(quoteIdentifier('a` ; REMOVE TABLE victim; --')).toBe(
+      '`a\\` ; REMOVE TABLE victim; --`',
+    );
   });
 
   it('rejects a NUL, which has no SurrealQL identifier escape', () => {
@@ -54,6 +56,6 @@ describe('escapeStringLiteral', () => {
   });
 
   it('leaves a double quote alone inside single quotes', () => {
-    expect(escapeStringLiteral('say "hi"')).toBe("'say \"hi\"'");
+    expect(escapeStringLiteral('say "hi"')).toBe('\'say "hi"\'');
   });
 });
