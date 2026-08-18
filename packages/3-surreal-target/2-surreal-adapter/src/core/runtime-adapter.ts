@@ -15,7 +15,7 @@ export interface SurrealRuntimeAdapterInstance
 
 /**
  * Like the target, the adapter shapes its descriptor structurally rather than
- * importing it from `@internal/surreal-runtime`. The runtime consumes this
+ * importing it from the surreal-runtime package. The runtime consumes this
  * descriptor's `create(stack)`; naming the runtime's type here would make the
  * two packages mutually dependent.
  */

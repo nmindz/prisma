@@ -372,6 +372,7 @@ export const knownInternalNamesInDist: readonly string[] = [
   '@internal/sql-relational-core/ast',
   '@internal/sql-runtime',
   '@internal/sqlite/migration',
+  '@internal/surreal-contract',
   '@internal/target-mongo/migration',
   '@internal/target-postgres',
   '@internal/target-postgres/codec-types',

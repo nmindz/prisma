@@ -21,6 +21,7 @@
     "@internal/framework-components": "workspace:8.0.0-rc.3",
     "@internal/surreal-value": "workspace:8.0.0-rc.3",
     "@internal/utils": "workspace:8.0.0-rc.3",
+    "@standard-schema/spec": "1.1.0",
     "arktype": "catalog:"
   },
   "devDependencies": {

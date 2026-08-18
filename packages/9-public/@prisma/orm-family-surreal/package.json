@@ -1,0 +1,69 @@
+{
+  "name": "@prisma/orm-family-surreal",
+  "version": "8.0.0-rc.3",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Prisma 8 SurrealDB family: contract IR, codecs, query AST, lowering, runtime",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "lint": "biome check . --error-on-warnings",
+    "clean": "rm -rf dist src-gen"
+  },
+  "dependencies": {
+    "@prisma/orm-framework": "workspace:8.0.0-rc.3",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.3",
+    "@standard-schema/spec": "1.1.0",
+    "arktype": "catalog:"
+  },
+  "devDependencies": {
+    "@internal/family-surreal": "workspace:8.0.0-rc.3",
+    "@internal/surreal-codec": "workspace:8.0.0-rc.3",
+    "@internal/surreal-contract": "workspace:8.0.0-rc.3",
+    "@internal/surreal-emitter": "workspace:8.0.0-rc.3",
+    "@internal/surreal-errors": "workspace:8.0.0-rc.3",
+    "@internal/surreal-lowering": "workspace:8.0.0-rc.3",
+    "@internal/surreal-query-ast": "workspace:8.0.0-rc.3",
+    "@internal/surreal-runtime": "workspace:8.0.0-rc.3",
+    "@internal/surreal-schema-ir": "workspace:8.0.0-rc.3",
+    "@internal/surreal-value": "workspace:8.0.0-rc.3",
+    "@repo/tsconfig": "workspace:8.0.0-rc.3",
+    "@repo/tsdown": "workspace:8.0.0-rc.3",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "exports": {
+    "./codec": "./dist/codec.mjs",
+    "./contract": "./dist/contract.mjs",
+    "./contract/entity-kinds": "./dist/contract__entity-kinds.mjs",
+    "./contract/types": "./dist/contract__types.mjs",
+    "./emitter": "./dist/emitter.mjs",
+    "./errors": "./dist/errors.mjs",
+    "./family": "./dist/family.mjs",
+    "./family/control": "./dist/family__control.mjs",
+    "./family/pack": "./dist/family__pack.mjs",
+    "./lowering": "./dist/lowering.mjs",
+    "./query-ast": "./dist/query-ast.mjs",
+    "./query-ast/plan": "./dist/query-ast__plan.mjs",
+    "./runtime": "./dist/runtime.mjs",
+    "./schema-ir": "./dist/schema-ir.mjs",
+    "./value": "./dist/value.mjs",
+    "./package.json": "./package.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/9-public/@prisma/orm-family-surreal"
+  }
+}

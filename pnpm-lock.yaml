@@ -3059,6 +3059,9 @@ importers:
       '@internal/utils':
         specifier: workspace:8.0.0-rc.3
         version: link:../../../1-framework/0-foundation/utils
+      '@standard-schema/spec':
+        specifier: 1.1.0
+        version: 1.1.0
       arktype:
         specifier: 'catalog:'
         version: 2.2.3
@@ -5482,6 +5485,64 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  packages/9-public/@prisma/orm-family-surreal:
+    dependencies:
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../orm-framework
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../orm-toolchain
+      '@standard-schema/spec':
+        specifier: 1.1.0
+        version: 1.1.0
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.3
+    devDependencies:
+      '@internal/family-surreal':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/9-family
+      '@internal/surreal-codec':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/1-foundation/surreal-codec
+      '@internal/surreal-contract':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/1-foundation/surreal-contract
+      '@internal/surreal-emitter':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/3-tooling/emitter
+      '@internal/surreal-errors':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/1-foundation/surreal-errors
+      '@internal/surreal-lowering':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/6-transport/surreal-lowering
+      '@internal/surreal-query-ast':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/4-query/query-ast
+      '@internal/surreal-runtime':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/7-runtime
+      '@internal/surreal-schema-ir':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/3-tooling/surreal-schema-ir
+      '@internal/surreal-value':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/1-foundation/surreal-value
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../0-config/tsdown
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/9-public/@prisma/orm-framework:
     dependencies:
       '@standard-schema/spec':
@@ -5684,6 +5745,37 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  packages/9-public/@prisma/orm-surrealdb:
+    dependencies:
+      '@prisma/orm-family-surreal':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../orm-family-surreal
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../orm-framework
+      '@prisma/orm-target-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../orm-target-surrealdb
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../orm-toolchain
+    devDependencies:
+      '@internal/extension-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../3-extensions/surrealdb
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../0-config/tsdown
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/9-public/@prisma/orm-target-mongo:
     dependencies:
       '@prisma/orm-family-mongo':
@@ -5826,6 +5918,43 @@ importers:
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.14
+        version: link:../../../0-config/tsdown
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/9-public/@prisma/orm-target-surrealdb:
+    dependencies:
+      '@prisma/orm-family-surreal':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../orm-family-surreal
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../orm-framework
+      '@standard-schema/spec':
+        specifier: 1.1.0
+        version: 1.1.0
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.3
+    devDependencies:
+      '@internal/adapter-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../3-surreal-target/2-surreal-adapter
+      '@internal/driver-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../3-surreal-target/3-surreal-driver
+      '@internal/target-surrealdb':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../3-surreal-target/1-surreal-target
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.3
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
