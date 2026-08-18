@@ -62,7 +62,7 @@ function checkIndex(tableName: string, index: SurrealIndex): void {
   }
   if (index.isVectorIndex && index.fields.length !== 1) {
     throw invalid(
-      `Vector index "${index.name}" on table "${tableName}" covers ${index.fields.length} fields; SurrealDB indexes exactly one vector field per HNSW or M-Tree index`,
+      `Vector index "${index.name}" on table "${tableName}" covers ${index.fields.length} fields; SurrealDB indexes exactly one vector field per HNSW index`,
       { table: tableName, index: index.name, fields: index.fields.length },
     );
   }

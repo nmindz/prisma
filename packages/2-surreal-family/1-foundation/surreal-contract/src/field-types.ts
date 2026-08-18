@@ -94,30 +94,26 @@ export type SurrealVectorDistance =
 export type SurrealVectorElement = 'F64' | 'F32' | 'I64' | 'I32' | 'I16';
 
 /**
- * What kind of index this is. SurrealDB's `DEFINE INDEX` covers four distinct
- * jobs — uniqueness, plain lookup, full-text search, and approximate nearest
- * neighbour — and each carries its own operand set, so they are separate
- * variants rather than flags on one shape.
+ * What kind of index this is.
+ *
+ * Three variants, not four: SurrealDB v3 removed the M-Tree vector index
+ * along with the bare `<|k|>` operator that queried it — *The `<|k|>` KNN
+ * operator (KTree / M-Tree) is no longer supported* — so HNSW is the only
+ * approximate-nearest-neighbour index left, and modelling M-Tree would only
+ * let a contract declare an index the database rejects.
  */
 export type SurrealIndexVariant =
   | { readonly kind: 'plain' }
   | { readonly kind: 'unique' }
+  /**
+   * BM25 full-text search. Spelled `FULLTEXT` in v3; the `SEARCH` keyword the
+   * earlier releases used no longer parses.
+   */
   | {
-      readonly kind: 'search';
+      readonly kind: 'fulltext';
       readonly analyzer: string;
       readonly bm25?: { readonly k1: number; readonly b: number };
       readonly highlights?: boolean;
-      readonly docIdsOrder?: number;
-      readonly docLengthsOrder?: number;
-      readonly postingsOrder?: number;
-      readonly termsOrder?: number;
-    }
-  | {
-      readonly kind: 'mtree';
-      readonly dimension: number;
-      readonly distance?: SurrealVectorDistance;
-      readonly element?: SurrealVectorElement;
-      readonly capacity?: number;
     }
   | {
       readonly kind: 'hnsw';

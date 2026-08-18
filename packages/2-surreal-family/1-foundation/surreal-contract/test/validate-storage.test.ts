@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   composeSurrealEntityKinds,
+  tableEntityKind,
   linkedTableNames,
   SurrealTable,
   validateSurrealTables,
@@ -107,9 +108,9 @@ describe('validateSurrealTables', () => {
     expect(() => validateSurrealTables({ table })).toThrow(/exactly one vector field/);
   });
 
-  it('accepts a vector index over a single field', () => {
+  it('accepts an HNSW index over a single field', () => {
     const table = new SurrealTable({
-      indexes: [{ name: 'vec', fields: ['embedding'], variant: { kind: 'mtree', dimension: 3 } }],
+      indexes: [{ name: 'vec', fields: ['embedding'], variant: { kind: 'hnsw', dimension: 3 } }],
     });
     expect(() => validateSurrealTables({ table })).not.toThrow();
   });
@@ -137,7 +138,7 @@ describe('composeSurrealEntityKinds', () => {
 
   it('rejects a pack kind that collides with a built-in', () => {
     expect(() =>
-      composeSurrealEntityKinds([{ kind: 'table', schema: undefined, construct: () => undefined }]),
+      composeSurrealEntityKinds([{ ...tableEntityKind, construct: () => undefined }]),
     ).toThrow(/duplicate entity kind "table"/);
   });
 });

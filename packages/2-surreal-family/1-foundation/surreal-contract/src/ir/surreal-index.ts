@@ -16,9 +16,9 @@ export interface SurrealIndexInput {
  *
  * The variant carries what the index is *for*: uniqueness, plain lookup,
  * BM25 full-text search, or approximate nearest-neighbour over a vector
- * column. Keeping those as separate variants rather than optional flags means
- * an M-Tree index cannot be declared without a dimension, and a search index
- * cannot be declared without an analyzer.
+ * column. Keeping those as separate variants rather than optional flags is
+ * what makes an HNSW index impossible to declare without a dimension, and a
+ * full-text index impossible to declare without an analyzer.
  */
 export class SurrealIndex extends IRNodeBase {
   readonly kind = 'surreal-index' as const;
@@ -38,8 +38,8 @@ export class SurrealIndex extends IRNodeBase {
     freezeNode(this);
   }
 
-  /** True for the two approximate-nearest-neighbour variants. */
+  /** True for the approximate-nearest-neighbour variant. */
   get isVectorIndex(): boolean {
-    return this.variant.kind === 'mtree' || this.variant.kind === 'hnsw';
+    return this.variant.kind === 'hnsw';
   }
 }

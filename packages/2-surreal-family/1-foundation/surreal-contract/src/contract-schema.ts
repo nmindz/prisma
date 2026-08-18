@@ -99,24 +99,10 @@ const IndexVariantSchema = type({ '+': 'reject', kind: "'plain' | 'unique'" })
   .or(
     type({
       '+': 'reject',
-      kind: "'search'",
+      kind: "'fulltext'",
       analyzer: 'string',
       'bm25?': type({ '+': 'reject', k1: 'number', b: 'number' }),
       'highlights?': 'boolean',
-      'docIdsOrder?': 'number',
-      'docLengthsOrder?': 'number',
-      'postingsOrder?': 'number',
-      'termsOrder?': 'number',
-    }),
-  )
-  .or(
-    type({
-      '+': 'reject',
-      kind: "'mtree'",
-      dimension: 'number',
-      'distance?': VectorDistanceSchema,
-      'element?': VectorElementSchema,
-      'capacity?': 'number',
     }),
   )
   .or(
