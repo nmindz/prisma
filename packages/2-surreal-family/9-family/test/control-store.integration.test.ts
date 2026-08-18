@@ -8,6 +8,7 @@ import {
   readAllMarkerRows,
   readLedgerRows,
   readMarkerRow,
+  writeMarkerRow,
 } from '../src/exports/control';
 
 const binding = {
@@ -104,6 +105,54 @@ describe.skipIf(!available)('control-plane storage against a live SurrealDB', ()
       '0002_second',
       '0003_other',
     ]);
+  });
+
+  it('creates a marker through writeMarkerRow and reads it back', async () => {
+    await writeMarkerRow(driver, 'written', {
+      storageHash: 'sh-w',
+      profileHash: 'ph-w',
+      contractJson: { models: {} },
+      canonicalVersion: 1,
+      updatedAt: new Date('2025-03-04T05:06:07.000Z'),
+      appTag: 'tag',
+      meta: { source: 'test' },
+      invariants: ['a', 'b'],
+    });
+    const marker = await readMarkerRow(driver, 'written');
+    expect(marker).toMatchObject({
+      storageHash: 'sh-w',
+      profileHash: 'ph-w',
+      canonicalVersion: 1,
+      appTag: 'tag',
+      meta: { source: 'test' },
+      invariants: ['a', 'b'],
+    });
+    expect(marker?.updatedAt.toISOString()).toBe('2025-03-04T05:06:07.000Z');
+  });
+
+  it('replaces a marker in place rather than leaving a window with none', async () => {
+    const base = {
+      contractJson: null,
+      canonicalVersion: null,
+      appTag: null,
+      meta: {},
+      invariants: [],
+    } as const;
+    await writeMarkerRow(driver, 'written', {
+      ...base,
+      storageHash: 'sh-2',
+      profileHash: 'ph-2',
+      updatedAt: new Date('2025-04-01T00:00:00.000Z'),
+    });
+    expect(await readMarkerRow(driver, 'written')).toMatchObject({
+      storageHash: 'sh-2',
+      profileHash: 'ph-2',
+      appTag: null,
+      canonicalVersion: null,
+    });
+    // Still exactly one row for the space.
+    const all = await readAllMarkerRows(driver);
+    expect([...all.keys()].filter((k) => k === 'written')).toHaveLength(1);
   });
 
   it('hides the control tables from an introspected schema', async () => {

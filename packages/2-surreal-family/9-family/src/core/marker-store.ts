@@ -167,3 +167,55 @@ export async function readLedgerRows(
     throw error;
   }
 }
+
+/**
+ * Writes the marker for one space, creating it or replacing it in place.
+ *
+ * `UPSERT` on the space-keyed record id rather than a delete-then-create
+ * pair: the marker is the single fact saying which contract a database is
+ * running, and a window where it does not exist is a window where a
+ * concurrent `db verify` reads "uninitialised" from a database that is fully
+ * migrated.
+ *
+ * Absent optionals are omitted from the payload rather than bound as `null`.
+ * SurrealDB's `option<T>` means `NONE | T`, so binding null into
+ * `option<string>` is rejected — *Expected `none | string` but found `NULL`*
+ * — while an omitted key is exactly NONE. This is hand-written SurrealQL, so
+ * it does not get the lowerer's `bindsAsNone` handling for free.
+ */
+export async function writeMarkerRow(
+  queryable: ControlQueryable,
+  space: string,
+  marker: ContractMarkerRecord,
+): Promise<void> {
+  const optional: Record<string, unknown> = {};
+  const assignments: string[] = [];
+  const bind = (field: string, value: unknown): void => {
+    if (value === null || value === undefined) return;
+    optional[field] = value;
+    assignments.push(`${field}: $${field}`);
+  };
+  bind('contractJson', marker.contractJson);
+  bind('canonicalVersion', marker.canonicalVersion);
+  bind('appTag', marker.appTag);
+
+  const content = [
+    'storageHash: $storageHash',
+    'profileHash: $profileHash',
+    'updatedAt: <datetime> $updatedAt',
+    'meta: $meta',
+    'invariants: $invariants',
+    ...assignments,
+  ].join(', ');
+
+  await rows(queryable, `UPSERT type::record($tb, $id) CONTENT { ${content} } RETURN NONE`, {
+    tb: MARKER_TABLE,
+    id: space,
+    storageHash: marker.storageHash,
+    profileHash: marker.profileHash,
+    updatedAt: marker.updatedAt.toISOString(),
+    meta: marker.meta,
+    invariants: marker.invariants,
+    ...optional,
+  });
+}
