@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-surrealdb",
-  "version": "8.0.0-rc.3",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -14,15 +14,15 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-family-surreal": "workspace:8.0.0-rc.3",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.3",
-    "@prisma/orm-target-surrealdb": "workspace:8.0.0-rc.3",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.3"
+    "@prisma/orm-family-surreal": "workspace:8.0.0-rc.14",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
+    "@prisma/orm-target-surrealdb": "workspace:8.0.0-rc.14",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14"
   },
   "devDependencies": {
-    "@internal/extension-surrealdb": "workspace:8.0.0-rc.3",
-    "@repo/tsconfig": "workspace:8.0.0-rc.3",
-    "@repo/tsdown": "workspace:8.0.0-rc.3",
+    "@internal/extension-surrealdb": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },

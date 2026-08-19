@@ -3014,26 +3014,26 @@ importers:
   packages/2-surreal-family/1-foundation/surreal-codec:
     dependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/contract
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/1-core/framework-components
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../surreal-contract
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../surreal-value
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3048,16 +3048,16 @@ importers:
   packages/2-surreal-family/1-foundation/surreal-contract:
     dependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/contract
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/1-core/framework-components
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../surreal-value
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
       '@standard-schema/spec':
         specifier: 1.1.0
@@ -3067,10 +3067,10 @@ importers:
         version: 2.2.3
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3085,10 +3085,10 @@ importers:
   packages/2-surreal-family/1-foundation/surreal-errors:
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3103,10 +3103,10 @@ importers:
   packages/2-surreal-family/1-foundation/surreal-value:
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3121,23 +3121,23 @@ importers:
   packages/2-surreal-family/2-authoring/contract-ts:
     dependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/contract
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/1-core/framework-components
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-contract
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3152,26 +3152,26 @@ importers:
   packages/2-surreal-family/3-tooling/emitter:
     dependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/contract
       '@internal/emitter':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/3-tooling/emitter
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/1-core/framework-components
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-contract
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3186,17 +3186,17 @@ importers:
   packages/2-surreal-family/3-tooling/surreal-schema-ir:
     dependencies:
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-contract
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3211,26 +3211,26 @@ importers:
   packages/2-surreal-family/4-query/query-ast:
     dependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/contract
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/1-core/framework-components
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-contract
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-value
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3245,32 +3245,32 @@ importers:
   packages/2-surreal-family/5-query-builders/orm:
     dependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/contract
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/1-core/framework-components
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-contract
       '@internal/surreal-query-ast':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../4-query/query-ast
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-value
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
       '@internal/surreal-lowering':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../6-transport/surreal-lowering
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3285,17 +3285,17 @@ importers:
   packages/2-surreal-family/6-transport/surreal-cbor:
     dependencies:
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-value
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3310,26 +3310,26 @@ importers:
   packages/2-surreal-family/6-transport/surreal-lowering:
     dependencies:
       '@internal/surreal-codec':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-codec
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-contract
       '@internal/surreal-query-ast':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../4-query/query-ast
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-foundation/surreal-value
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3344,35 +3344,35 @@ importers:
   packages/2-surreal-family/7-runtime:
     dependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/contract
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/framework-components
       '@internal/surreal-codec':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../1-foundation/surreal-codec
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../1-foundation/surreal-contract
       '@internal/surreal-lowering':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../6-transport/surreal-lowering
       '@internal/surreal-query-ast':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../4-query/query-ast
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../1-foundation/surreal-value
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/utils
     devDependencies:
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -3387,35 +3387,35 @@ importers:
   packages/2-surreal-family/9-family:
     dependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/contract
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/framework-components
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../1-foundation/surreal-contract
       '@internal/surreal-emitter':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../3-tooling/emitter
       '@internal/surreal-schema-ir':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../3-tooling/surreal-schema-ir
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../1-foundation/surreal-value
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/utils
     devDependencies:
       '@internal/driver-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../3-surreal-target/3-surreal-driver
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -4238,65 +4238,65 @@ importers:
   packages/3-extensions/surrealdb:
     dependencies:
       '@internal/adapter-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../3-surreal-target/2-surreal-adapter
       '@internal/cli':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/3-tooling/cli
       '@internal/config':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/config
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/contract
       '@internal/driver-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../3-surreal-target/3-surreal-driver
       '@internal/family-surreal':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/9-family
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/framework-components
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-contract
       '@internal/surreal-contract-ts':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/2-authoring/contract-ts
       '@internal/surreal-errors':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-errors
       '@internal/surreal-lowering':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/6-transport/surreal-lowering
       '@internal/surreal-orm':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/5-query-builders/orm
       '@internal/surreal-query-ast':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/4-query/query-ast
       '@internal/surreal-runtime':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/7-runtime
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-value
       '@internal/target-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../3-surreal-target/1-surreal-target
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/utils
     devDependencies:
       '@internal/surreal-schema-ir':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/3-tooling/surreal-schema-ir
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -4536,28 +4536,28 @@ importers:
   packages/3-surreal-target/1-surreal-target:
     dependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/contract
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/framework-components
       '@internal/surreal-codec':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-codec
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-contract
       '@internal/surreal-errors':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-errors
       '@internal/surreal-schema-ir':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/3-tooling/surreal-schema-ir
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-value
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/utils
       '@standard-schema/spec':
         specifier: 1.1.0
@@ -4567,16 +4567,16 @@ importers:
         version: 2.2.3
     devDependencies:
       '@internal/driver-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../3-surreal-driver
       '@internal/family-surreal':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/9-family
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -4591,38 +4591,38 @@ importers:
   packages/3-surreal-target/2-surreal-adapter:
     dependencies:
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/framework-components
       '@internal/surreal-codec':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-codec
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-contract
       '@internal/surreal-lowering':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/6-transport/surreal-lowering
       '@internal/surreal-query-ast':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/4-query/query-ast
       '@internal/target-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../1-surreal-target
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/utils
     devDependencies:
       '@internal/contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/contract
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-value
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -4637,35 +4637,35 @@ importers:
   packages/3-surreal-target/3-surreal-driver:
     dependencies:
       '@internal/errors':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/errors
       '@internal/framework-components':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/framework-components
       '@internal/surreal-cbor':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/6-transport/surreal-cbor
       '@internal/surreal-errors':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-errors
       '@internal/surreal-lowering':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/6-transport/surreal-lowering
       '@internal/utils':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/utils
     devDependencies:
       '@internal/surreal-query-ast':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/4-query/query-ast
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-value
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -5608,10 +5608,10 @@ importers:
   packages/9-public/@prisma/orm-family-surreal:
     dependencies:
       '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../orm-framework
       '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../orm-toolchain
       '@standard-schema/spec':
         specifier: 1.1.0
@@ -5621,49 +5621,49 @@ importers:
         version: 2.2.3
     devDependencies:
       '@internal/family-surreal':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/9-family
       '@internal/surreal-cbor':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/6-transport/surreal-cbor
       '@internal/surreal-codec':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/1-foundation/surreal-codec
       '@internal/surreal-contract':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/1-foundation/surreal-contract
       '@internal/surreal-contract-ts':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/2-authoring/contract-ts
       '@internal/surreal-emitter':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/3-tooling/emitter
       '@internal/surreal-errors':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/1-foundation/surreal-errors
       '@internal/surreal-lowering':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/6-transport/surreal-lowering
       '@internal/surreal-orm':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/5-query-builders/orm
       '@internal/surreal-query-ast':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/4-query/query-ast
       '@internal/surreal-runtime':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/7-runtime
       '@internal/surreal-schema-ir':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/3-tooling/surreal-schema-ir
       '@internal/surreal-value':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/1-foundation/surreal-value
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -5877,26 +5877,26 @@ importers:
   packages/9-public/@prisma/orm-surrealdb:
     dependencies:
       '@prisma/orm-family-surreal':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../orm-family-surreal
       '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../orm-framework
       '@prisma/orm-target-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../orm-target-surrealdb
       '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../orm-toolchain
     devDependencies:
       '@internal/extension-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../3-extensions/surrealdb
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
@@ -6058,10 +6058,10 @@ importers:
   packages/9-public/@prisma/orm-target-surrealdb:
     dependencies:
       '@prisma/orm-family-surreal':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../orm-family-surreal
       '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../orm-framework
       '@standard-schema/spec':
         specifier: 1.1.0
@@ -6071,19 +6071,19 @@ importers:
         version: 2.2.3
     devDependencies:
       '@internal/adapter-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../3-surreal-target/2-surreal-adapter
       '@internal/driver-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../3-surreal-target/3-surreal-driver
       '@internal/target-surrealdb':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../3-surreal-target/1-surreal-target
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.3
+        specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
