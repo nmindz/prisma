@@ -508,6 +508,11 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: 'errors',
         },
         {
+          dir: 'packages/2-surreal-family/2-authoring/contract-psl',
+          name: '@internal/surreal-contract-psl',
+          entry: 'contract-psl',
+        },
+        {
           dir: 'packages/2-surreal-family/2-authoring/contract-ts',
           name: '@internal/surreal-contract-ts',
           entry: 'contract-ts',

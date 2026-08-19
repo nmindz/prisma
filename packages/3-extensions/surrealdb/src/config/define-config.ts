@@ -1,11 +1,14 @@
 import surrealAdapter from '@internal/adapter-surrealdb/control';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { ContractConfig, PrismaNextConfig } from '@internal/config/config-types';
 import { defineConfig as coreDefineConfig } from '@internal/config/config-types';
 import surrealDriver from '@internal/driver-surrealdb/control';
 import { surrealFamilyDescriptor } from '@internal/family-surreal/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
+import { surrealContract } from '@internal/surreal-contract-psl/provider';
+import { typescriptContractFromPath } from '@internal/surreal-contract-ts/config-types';
 import surrealTarget from '@internal/target-surrealdb/control';
 import { ifDefined } from '@internal/utils/defined';
+import { extname, join } from 'pathe';
 
 export interface SurrealdbConfigOptions {
   /**
@@ -16,28 +19,50 @@ export interface SurrealdbConfigOptions {
    * alongside the socket URL, and a bare `wss://host/rpc` names neither.
    */
   readonly connection?: string;
+  /**
+   * Path to the contract's authoring source: a `.prisma` schema (interpreted
+   * by the PSL provider) or a `.ts` module whose default export is a
+   * `defineContract` result. Optional — a client can also load an
+   * already-emitted `contract.json` directly.
+   */
+  readonly contract?: string;
+  /** Directory `contract.json` is emitted into; defaults beside the source. */
+  readonly output?: string;
   readonly extensions?: readonly ControlExtensionDescriptor<'surreal', 'surrealdb'>[];
   readonly migrations?: {
     readonly dir?: string;
   };
 }
 
+function deriveOutputPath(contractPath: string): string {
+  const ext = extname(contractPath);
+  if (ext.length === 0) {
+    return `${contractPath}.json`;
+  }
+  return `${contractPath.slice(0, -ext.length)}.json`;
+}
+
+function contractConfigFor(options: SurrealdbConfigOptions): ContractConfig | undefined {
+  if (options.contract === undefined) {
+    return undefined;
+  }
+  const output =
+    options.output !== undefined
+      ? join(options.output, 'contract.json')
+      : deriveOutputPath(options.contract);
+  return extname(options.contract) === '.ts'
+    ? typescriptContractFromPath(options.contract, output)
+    : surrealContract(options.contract, { output });
+}
+
 /**
  * Wires the SurrealDB stack into a `prisma.config.ts`.
- *
- * No `contract` option yet. `ContractConfig` describes an authoring *source*
- * that the emitter compiles into `contract.json` — for SurrealDB that source
- * would be the family's `defineContract` builder, which already exists, but
- * unlike Mongo's `typescriptContractFromPath` there is no
- * `ContractSourceProvider` wiring it up to a `contract` option yet. Accepting
- * a path to an already-emitted artifact under that name would misdescribe
- * what the field means, so a SurrealDB contract is loaded directly by the
- * client until that wiring exists.
  *
  * ```ts
  * import { defineConfig } from '@prisma/orm-surrealdb/config';
  *
  * export default defineConfig({
+ *   contract: './prisma/schema.prisma',
  *   connection: 'wss://user:pass@db.example.internal/rpc/app/main',
  * });
  * ```
@@ -51,6 +76,7 @@ export function defineConfig(
     adapter: surrealAdapter,
     driver: surrealDriver,
     extensions: options.extensions ?? [],
+    ...ifDefined('contract', contractConfigFor(options)),
     ...ifDefined(
       'db',
       options.connection === undefined ? undefined : { connection: options.connection },

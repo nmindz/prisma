@@ -24,6 +24,7 @@
     "@internal/surreal-cbor": "workspace:8.0.0-rc.14",
     "@internal/surreal-codec": "workspace:8.0.0-rc.14",
     "@internal/surreal-contract": "workspace:8.0.0-rc.14",
+    "@internal/surreal-contract-psl": "workspace:8.0.0-rc.14",
     "@internal/surreal-contract-ts": "workspace:8.0.0-rc.14",
     "@internal/surreal-emitter": "workspace:8.0.0-rc.14",
     "@internal/surreal-errors": "workspace:8.0.0-rc.14",
@@ -47,11 +48,15 @@
     }
   },
   "exports": {
+    "./cbor": "./dist/cbor.mjs",
     "./codec": "./dist/codec.mjs",
     "./contract": "./dist/contract.mjs",
     "./contract/entity-kinds": "./dist/contract__entity-kinds.mjs",
     "./contract/types": "./dist/contract__types.mjs",
+    "./contract-psl": "./dist/contract-psl.mjs",
+    "./contract-psl/provider": "./dist/contract-psl__provider.mjs",
     "./contract-ts": "./dist/contract-ts.mjs",
+    "./contract-ts/config-types": "./dist/contract-ts__config-types.mjs",
     "./emitter": "./dist/emitter.mjs",
     "./errors": "./dist/errors.mjs",
     "./family": "./dist/family.mjs",

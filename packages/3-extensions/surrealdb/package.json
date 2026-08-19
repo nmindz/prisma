@@ -25,6 +25,7 @@
     "@internal/family-surreal": "workspace:8.0.0-rc.14",
     "@internal/framework-components": "workspace:8.0.0-rc.14",
     "@internal/surreal-contract": "workspace:8.0.0-rc.14",
+    "@internal/surreal-contract-psl": "workspace:8.0.0-rc.14",
     "@internal/surreal-contract-ts": "workspace:8.0.0-rc.14",
     "@internal/surreal-errors": "workspace:8.0.0-rc.14",
     "@internal/surreal-lowering": "workspace:8.0.0-rc.14",
@@ -33,7 +34,8 @@
     "@internal/surreal-runtime": "workspace:8.0.0-rc.14",
     "@internal/surreal-value": "workspace:8.0.0-rc.14",
     "@internal/target-surrealdb": "workspace:8.0.0-rc.14",
-    "@internal/utils": "workspace:8.0.0-rc.14"
+    "@internal/utils": "workspace:8.0.0-rc.14",
+    "pathe": "^2.0.3"
   },
   "devDependencies": {
     "@internal/surreal-lowering": "workspace:8.0.0-rc.14",

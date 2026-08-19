@@ -17,7 +17,8 @@
     "@prisma/orm-family-surreal": "workspace:8.0.0-rc.14",
     "@prisma/orm-framework": "workspace:8.0.0-rc.14",
     "@prisma/orm-target-surrealdb": "workspace:8.0.0-rc.14",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14"
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
+    "pathe": "^2.0.3"
   },
   "devDependencies": {
     "@internal/extension-surrealdb": "workspace:8.0.0-rc.14",
@@ -39,6 +40,7 @@
     "./adapter/codec-lookup": "./dist/adapter__codec-lookup.mjs",
     "./adapter/control": "./dist/adapter__control.mjs",
     "./adapter/runtime": "./dist/adapter__runtime.mjs",
+    "./cbor": "./dist/cbor.mjs",
     "./components": "./dist/components.mjs",
     "./components/authoring": "./dist/components__authoring.mjs",
     "./components/codec": "./dist/components__codec.mjs",
@@ -64,6 +66,7 @@
     "./contract/validate-domain": "./dist/contract__validate-domain.mjs",
     "./contract-builder": "./dist/contract-builder.mjs",
     "./contract-ts": "./dist/contract-ts.mjs",
+    "./contract-ts/config-types": "./dist/contract-ts__config-types.mjs",
     "./control": "./dist/control.mjs",
     "./driver": "./dist/driver.mjs",
     "./driver/control": "./dist/driver__control.mjs",

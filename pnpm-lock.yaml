@@ -3118,8 +3118,54 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/2-surreal-family/2-authoring/contract-psl:
+    dependencies:
+      '@internal/config':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../1-framework/1-core/config
+      '@internal/contract':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../1-framework/0-foundation/contract
+      '@internal/framework-components':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../1-framework/1-core/framework-components
+      '@internal/psl-parser':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../1-framework/2-authoring/psl-parser
+      '@internal/surreal-contract':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../1-foundation/surreal-contract
+      '@internal/utils':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../1-framework/0-foundation/utils
+    devDependencies:
+      '@internal/surreal-contract-ts':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../contract-ts
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../0-config/tsdown
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/2-surreal-family/2-authoring/contract-ts:
     dependencies:
+      '@internal/config':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../1-framework/1-core/config
       '@internal/contract':
         specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/contract
@@ -3133,12 +3179,18 @@ importers:
         specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsdown
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -3263,6 +3315,9 @@ importers:
         specifier: workspace:8.0.0-rc.14
         version: link:../../../1-framework/0-foundation/utils
     devDependencies:
+      '@internal/driver-surrealdb':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../3-surreal-target/3-surreal-driver
       '@internal/surreal-lowering':
         specifier: workspace:8.0.0-rc.14
         version: link:../../6-transport/surreal-lowering
@@ -4261,6 +4316,9 @@ importers:
       '@internal/surreal-contract':
         specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/1-foundation/surreal-contract
+      '@internal/surreal-contract-psl':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../2-surreal-family/2-authoring/contract-psl
       '@internal/surreal-contract-ts':
         specifier: workspace:8.0.0-rc.14
         version: link:../../2-surreal-family/2-authoring/contract-ts
@@ -4288,6 +4346,9 @@ importers:
       '@internal/utils':
         specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/0-foundation/utils
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
     devDependencies:
       '@internal/surreal-schema-ir':
         specifier: workspace:8.0.0-rc.14
@@ -5632,6 +5693,9 @@ importers:
       '@internal/surreal-contract':
         specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/1-foundation/surreal-contract
+      '@internal/surreal-contract-psl':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../../2-surreal-family/2-authoring/contract-psl
       '@internal/surreal-contract-ts':
         specifier: workspace:8.0.0-rc.14
         version: link:../../../2-surreal-family/2-authoring/contract-ts
@@ -5888,6 +5952,9 @@ importers:
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.14
         version: link:../orm-toolchain
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
     devDependencies:
       '@internal/extension-surrealdb':
         specifier: workspace:8.0.0-rc.14
