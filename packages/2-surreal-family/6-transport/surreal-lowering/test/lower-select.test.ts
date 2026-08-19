@@ -241,4 +241,84 @@ describe('lowerQuery — SELECT', () => {
       }),
     ).toBe('SELECT * FROM `thing`:1');
   });
+
+  it('renders an array index path segment', () => {
+    expect(
+      one({
+        kind: 'select',
+        projections: [{ expr: field('tags', { kind: 'index', index: 0 }) }],
+        from: [personTable],
+      }),
+    ).toBe('SELECT `tags`[0] FROM `person`');
+  });
+
+  it('rejects a negative array index', () => {
+    expect(() =>
+      one({
+        kind: 'select',
+        projections: [{ expr: field('tags', { kind: 'index', index: -1 }) }],
+        from: [personTable],
+      }),
+    ).toThrow(expect.objectContaining({ code: 'LOWERING.INVALID_PATH_INDEX' }));
+  });
+
+  it('rejects a non-integer array index', () => {
+    expect(() =>
+      one({
+        kind: 'select',
+        projections: [{ expr: field('tags', { kind: 'index', index: 1.5 }) }],
+        from: [personTable],
+      }),
+    ).toThrow(expect.objectContaining({ code: 'LOWERING.INVALID_PATH_INDEX' }));
+  });
+
+  it('rejects a KNN k that is not a positive safe integer', () => {
+    const withK = (k: number) =>
+      one({
+        kind: 'select',
+        projections: [{ expr: all() }],
+        from: [{ kind: 'table', name: 'doc' }],
+        where: knn({
+          field: field('embedding'),
+          k,
+          operand: { kind: 'ef', efSearch: 1 },
+          vector: param('v', []),
+        }),
+      });
+    expect(() => withK(0)).toThrow(expect.objectContaining({ code: 'LOWERING.INVALID_KNN_K' }));
+    expect(() => withK(-1)).toThrow(expect.objectContaining({ code: 'LOWERING.INVALID_KNN_K' }));
+    expect(() => withK(1.5)).toThrow(expect.objectContaining({ code: 'LOWERING.INVALID_KNN_K' }));
+  });
+
+  it('rejects a KNN ef-search that is not a positive safe integer', () => {
+    expect(() =>
+      one({
+        kind: 'select',
+        projections: [{ expr: all() }],
+        from: [{ kind: 'table', name: 'doc' }],
+        where: knn({
+          field: field('embedding'),
+          k: 1,
+          operand: { kind: 'ef', efSearch: 0 },
+          vector: param('v', []),
+        }),
+      }),
+    ).toThrow(expect.objectContaining({ code: 'LOWERING.INVALID_KNN_EF' }));
+  });
+
+  it('rejects a KNN distance metric outside the legal set', () => {
+    expect(() =>
+      one({
+        kind: 'select',
+        projections: [{ expr: all() }],
+        from: [{ kind: 'table', name: 'doc' }],
+        where: knn({
+          field: field('embedding'),
+          k: 1,
+          operand: { kind: 'distance', distance: 'DROP TABLE person; --' as never },
+          vector: param('v', []),
+        }),
+      }),
+    ).toThrow(expect.objectContaining({ code: 'LOWERING.INVALID_KNN_DISTANCE' }));
+  });
 });

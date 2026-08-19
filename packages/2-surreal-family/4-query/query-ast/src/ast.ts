@@ -213,6 +213,27 @@ export interface GraphPathExpr {
 }
 
 /**
+ * The distance metric that appears literally in the KNN operator,
+ * `embedding <|k,COSINE|> $vector`.
+ *
+ * This is a distinct surface from `@internal/surreal-contract`'s
+ * `SurrealVectorDistance`, which spells the same metrics lowercase for the
+ * `DEFINE INDEX … HNSW DIST` clause. The two conventions do not agree on
+ * case, so this type is kept local rather than shared — reusing the
+ * contract's type here would either mis-render the operator or force a
+ * casing rewrite of a clause this module does not own.
+ */
+export type KnnDistance =
+  | 'CHEBYSHEV'
+  | 'COSINE'
+  | 'EUCLIDEAN'
+  | 'HAMMING'
+  | 'JACCARD'
+  | 'MANHATTAN'
+  | 'MINKOWSKI'
+  | 'PEARSON';
+
+/**
  * How SurrealDB should find the k nearest neighbours.
  *
  * `ef` searches an HNSW index, with the operand as the search-effort
@@ -224,7 +245,7 @@ export interface GraphPathExpr {
  */
 export type KnnOperand =
   | { readonly kind: 'ef'; readonly efSearch: number }
-  | { readonly kind: 'distance'; readonly distance: string };
+  | { readonly kind: 'distance'; readonly distance: KnnDistance };
 
 /** K-nearest-neighbour search: `embedding <|4,COSINE|> $vector`. */
 export interface KnnExpr {
@@ -233,6 +254,24 @@ export interface KnnExpr {
   readonly k: number;
   readonly operand: KnnOperand;
   readonly vector: SurrealExpr;
+}
+
+/**
+ * A reference to a variable a `LET` statement declared earlier in the same
+ * query: `$cutoff` in `LET $cutoff = 18; SELECT * FROM person WHERE age >
+ * $cutoff`.
+ *
+ * This is a distinct node from {@link ParamExpr} because the two bind
+ * differently at render time. A param's name is prefixed the same way its
+ * value is registered, so it stays a bound variable across a batched lowering
+ * that prefixes every plan. A `LET` name has no such registration — it is
+ * rendered by splicing the declaring statement's name — so a reference has to
+ * go through the same prefixing the declaration gets, or a `LET` from one
+ * plan in a batch would leak into another plan's scope under the same name.
+ */
+export interface LetRefExpr {
+  readonly kind: 'let-ref';
+  readonly name: string;
 }
 
 /**
@@ -260,6 +299,7 @@ export type SurrealExpr =
   | GraphPathExpr
   | IfExpr
   | KnnExpr
+  | LetRefExpr
   | LiteralExpr
   | NoneExpr
   | NotExpr

@@ -47,6 +47,9 @@ export function lowerQuery(query: SurrealQuery, options?: LowerQueryOptions): Lo
       }
       return applyBindCast(`$${name}`, param.fieldType, param.value, position);
     },
+    letName(name: string) {
+      return `${prefix}${name}`;
+    },
     statement(statement: SurrealStatement) {
       return renderStatement(statement, ctx);
     },

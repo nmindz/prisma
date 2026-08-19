@@ -12,13 +12,16 @@ import {
   graph,
   isNone,
   isNull,
+  isSurrealExprNode,
   knn,
+  letRef,
   lit,
   none,
   not,
   obj,
   or,
   param,
+  raw,
   recordId,
   type SurrealExpr,
   type SurrealQuery,
@@ -124,6 +127,65 @@ describe('knn', () => {
         operand: { kind: 'distance', distance: 'COSINE' },
       }),
     ).toMatchObject({ kind: 'knn', k: 4, operand: { kind: 'distance', distance: 'COSINE' } });
+  });
+});
+
+describe('letRef', () => {
+  it('builds a reference to a LET-bound variable', () => {
+    expect(letRef('cutoff')).toEqual({ kind: 'let-ref', name: 'cutoff' });
+  });
+});
+
+describe('isSurrealExprNode', () => {
+  it('accepts every builder-made expression', () => {
+    expect(isSurrealExprNode(all())).toBe(true);
+    expect(isSurrealExprNode(none())).toBe(true);
+    expect(isSurrealExprNode(field('a'))).toBe(true);
+    expect(isSurrealExprNode(param('p0', 1))).toBe(true);
+    expect(isSurrealExprNode(lit(1))).toBe(true);
+    expect(isSurrealExprNode(recordId(new RecordId('person', 'ada')))).toBe(true);
+    expect(isSurrealExprNode(binary('=', field('a'), lit(1)))).toBe(true);
+    expect(isSurrealExprNode(and(lit(true)))).toBe(true);
+    expect(isSurrealExprNode(or(lit(true)))).toBe(true);
+    expect(isSurrealExprNode(not(lit(true)))).toBe(true);
+    expect(isSurrealExprNode(isNone(field('a')))).toBe(true);
+    expect(isSurrealExprNode(fn('count'))).toBe(true);
+    expect(isSurrealExprNode(cast({ kind: 'scalar', name: 'int' }, lit('1')))).toBe(true);
+    expect(isSurrealExprNode(arr(lit(1)))).toBe(true);
+    expect(isSurrealExprNode(obj({ a: lit(1) }))).toBe(true);
+    expect(isSurrealExprNode(graph(field('id'), []))).toBe(true);
+    expect(
+      isSurrealExprNode(
+        knn({
+          field: field('e'),
+          k: 1,
+          vector: param('v', []),
+          operand: { kind: 'ef', efSearch: 1 },
+        }),
+      ),
+    ).toBe(true);
+    expect(isSurrealExprNode(letRef('x'))).toBe(true);
+  });
+
+  it('rejects a JSON-shaped object that merely looks like a node', () => {
+    expect(isSurrealExprNode({ kind: 'field', path: [] })).toBe(false);
+    expect(isSurrealExprNode({ kind: 'raw', parts: [] })).toBe(false);
+  });
+
+  it('rejects non-object and nullish values', () => {
+    expect(isSurrealExprNode(null)).toBe(false);
+    expect(isSurrealExprNode(undefined)).toBe(false);
+    expect(isSurrealExprNode('field')).toBe(false);
+    expect(isSurrealExprNode(42)).toBe(false);
+  });
+
+  it('stays invisible to Object.keys and JSON.stringify', () => {
+    const node = field('a');
+    expect(Object.keys(node)).toEqual(['kind', 'path']);
+    expect(JSON.parse(JSON.stringify(node))).toEqual({
+      kind: 'field',
+      path: [{ kind: 'key', name: 'a' }],
+    });
   });
 });
 
@@ -251,5 +313,21 @@ describe('walkExpr', () => {
     const seen: string[] = [];
     walkExpr(and(lit(1), lit(2)), (expr) => seen.push(expr.kind));
     expect(seen).toEqual(['and', 'literal', 'literal']);
+  });
+});
+
+describe('raw', () => {
+  it('builds a single-text raw fragment', () => {
+    expect(raw('REMOVE TABLE IF EXISTS ticker')).toEqual({
+      kind: 'raw',
+      parts: [{ kind: 'text', text: 'REMOVE TABLE IF EXISTS ticker' }],
+    });
+  });
+
+  it('is branded, unlike a JSON lookalike of the same shape', () => {
+    expect(isSurrealExprNode(raw('RETURN 1'))).toBe(true);
+    expect(
+      isSurrealExprNode(JSON.parse('{"kind":"raw","parts":[{"kind":"text","text":"RETURN 1"}]}')),
+    ).toBe(false);
   });
 });

@@ -37,6 +37,7 @@ export function walkExpr(expr: SurrealExpr, visit: Visit): void {
     case 'all':
     case 'none':
     case 'literal':
+    case 'let-ref':
     case 'param':
     case 'record-id':
       return;

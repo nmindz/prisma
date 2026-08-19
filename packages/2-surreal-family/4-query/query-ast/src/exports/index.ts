@@ -16,8 +16,10 @@ export type {
   IfExpr,
   InsertStatement,
   KillStatement,
+  KnnDistance,
   KnnExpr,
   KnnOperand,
+  LetRefExpr,
   LetStatement,
   LiteralExpr,
   LiveSelectStatement,
@@ -60,14 +62,17 @@ export {
   isNone,
   isNull,
   knn,
+  letRef,
   lit,
   none,
   not,
   obj,
   or,
   param,
+  raw,
   recordId,
 } from '../builders';
+export { isSurrealExprNode } from '../node-brand';
 export type { SurrealFieldShape, SurrealResultShape } from '../result-shape';
 export { freezeSurrealFieldShape, freezeSurrealResultShape } from '../result-shape';
 export { collectParams, walkExpr, walkStatement } from '../visitors';

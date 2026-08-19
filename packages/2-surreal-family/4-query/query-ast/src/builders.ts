@@ -9,9 +9,12 @@ import type {
   NoneExpr,
   SurrealExpr,
 } from './ast';
+import { brandNode } from './node-brand';
 
-const ALL: AllExpr = Object.freeze({ kind: 'all' });
-const NONE: NoneExpr = Object.freeze({ kind: 'none' });
+// Branded before freezing: `Object.freeze` makes an object non-extensible,
+// and `brandNode` adds a property, so the order the other way round throws.
+const ALL: AllExpr = Object.freeze(brandNode<AllExpr>({ kind: 'all' }));
+const NONE: NoneExpr = Object.freeze(brandNode<NoneExpr>({ kind: 'none' }));
 
 /** `*` — every field of the record in scope. */
 export function all(): AllExpr {
@@ -39,7 +42,7 @@ export function field(...path: readonly (string | FieldPathSegment)[]): SurrealE
       segments.push({ kind: 'key', name: part });
     }
   }
-  return { kind: 'field', path: Object.freeze(segments) };
+  return brandNode({ kind: 'field', path: Object.freeze(segments) });
 }
 
 export function param(
@@ -47,21 +50,26 @@ export function param(
   value: unknown,
   options?: { readonly codecId?: string; readonly fieldType?: SurrealFieldType },
 ): SurrealExpr {
-  return {
+  return brandNode({
     kind: 'param',
     name,
     value,
     ...(options?.codecId === undefined ? {} : { codecId: options.codecId }),
     ...(options?.fieldType === undefined ? {} : { fieldType: options.fieldType }),
-  };
+  });
 }
 
 export function lit(value: string | number | boolean | null): SurrealExpr {
-  return { kind: 'literal', value };
+  return brandNode({ kind: 'literal', value });
 }
 
 export function recordId(id: RecordId): SurrealExpr {
-  return { kind: 'record-id', recordId: id };
+  return brandNode({ kind: 'record-id', recordId: id });
+}
+
+/** `$name` referencing a value a `LET` statement declared earlier. */
+export function letRef(name: string): SurrealExpr {
+  return brandNode({ kind: 'let-ref', name });
 }
 
 export function binary(
@@ -69,48 +77,48 @@ export function binary(
   left: SurrealExpr,
   right: SurrealExpr,
 ): SurrealExpr {
-  return { kind: 'binary', operator, left, right };
+  return brandNode({ kind: 'binary', operator, left, right });
 }
 
 export function and(...operands: readonly SurrealExpr[]): SurrealExpr {
-  return { kind: 'and', operands: Object.freeze([...operands]) };
+  return brandNode({ kind: 'and', operands: Object.freeze([...operands]) });
 }
 
 export function or(...operands: readonly SurrealExpr[]): SurrealExpr {
-  return { kind: 'or', operands: Object.freeze([...operands]) };
+  return brandNode({ kind: 'or', operands: Object.freeze([...operands]) });
 }
 
 export function not(operand: SurrealExpr): SurrealExpr {
-  return { kind: 'not', operand };
+  return brandNode({ kind: 'not', operand });
 }
 
 export function isNone(operand: SurrealExpr, negated = false): SurrealExpr {
-  return { kind: 'presence', operand, test: 'none', negated };
+  return brandNode({ kind: 'presence', operand, test: 'none', negated });
 }
 
 export function isNull(operand: SurrealExpr, negated = false): SurrealExpr {
-  return { kind: 'presence', operand, test: 'null', negated };
+  return brandNode({ kind: 'presence', operand, test: 'null', negated });
 }
 
 export function fn(name: string, ...args: readonly SurrealExpr[]): SurrealExpr {
-  return { kind: 'function-call', name, args: Object.freeze([...args]) };
+  return brandNode({ kind: 'function-call', name, args: Object.freeze([...args]) });
 }
 
 export function cast(type: SurrealFieldType, operand: SurrealExpr): SurrealExpr {
-  return { kind: 'cast', type, operand };
+  return brandNode({ kind: 'cast', type, operand });
 }
 
 export function arr(...items: readonly SurrealExpr[]): SurrealExpr {
-  return { kind: 'array', items: Object.freeze([...items]) };
+  return brandNode({ kind: 'array', items: Object.freeze([...items]) });
 }
 
 export function obj(entries: Readonly<Record<string, SurrealExpr>>): SurrealExpr {
-  return {
+  return brandNode({
     kind: 'object',
     entries: Object.freeze(
       Object.entries(entries).map(([key, value]) => Object.freeze({ key, value })),
     ),
-  };
+  });
 }
 
 /**
@@ -118,14 +126,26 @@ export function obj(entries: Readonly<Record<string, SurrealExpr>>): SurrealExpr
  * renders `start->follows->person.name`.
  */
 export function graph(start: SurrealExpr, steps: readonly GraphStep[], tail?: string): SurrealExpr {
-  return {
+  return brandNode({
     kind: 'graph-path',
     start,
     steps: Object.freeze([...steps]),
     ...(tail === undefined
       ? {}
       : { tail: Object.freeze(tail.split('.').map((name) => ({ kind: 'key' as const, name }))) }),
-  };
+  });
+}
+
+/**
+ * A verbatim SurrealQL fragment, for statements the builders do not model —
+ * DDL, `REMOVE`, and other text a caller renders elsewhere. This is the one
+ * sanctioned way to splice text through the raw lane: the returned node
+ * carries the builder brand, and the lane refuses shape-alike objects from
+ * anywhere else. The text is the caller's responsibility — nothing escapes
+ * it — so it must never be built from application data; bind that instead.
+ */
+export function raw(text: string): SurrealExpr {
+  return brandNode({ kind: 'raw', parts: [{ kind: 'text', text }] });
 }
 
 /**
@@ -138,11 +158,11 @@ export function knn(options: {
   readonly vector: SurrealExpr;
   readonly operand: KnnOperand;
 }): SurrealExpr {
-  return {
+  return brandNode({
     kind: 'knn',
     field: options.field,
     k: options.k,
     vector: options.vector,
     operand: options.operand,
-  };
+  });
 }

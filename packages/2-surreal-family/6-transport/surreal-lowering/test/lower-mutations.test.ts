@@ -1,5 +1,6 @@
 import {
   field,
+  letRef,
   lit,
   obj,
   param,
@@ -193,5 +194,31 @@ describe('lowerQuery — multi-statement', () => {
 
   it('lowers an empty query to empty text', () => {
     expect(lowerQuery(query).surql).toBe('');
+  });
+
+  it('renders a reference to a LET-bound variable declared earlier in the same plan', () => {
+    expect(
+      lowerQuery({
+        statements: [
+          { kind: 'let', name: 'cutoff', expr: param('p0', 18) },
+          { kind: 'return', expr: letRef('cutoff') },
+        ],
+      }).surql,
+    ).toBe('LET $cutoff = $p0;\nRETURN $cutoff');
+  });
+
+  it('prefixes both the LET declaration and its reference, so two plans in one batch cannot collide', () => {
+    const plan: SurrealQuery = {
+      statements: [
+        { kind: 'let', name: 'cutoff', expr: param('p0', 18) },
+        { kind: 'return', expr: letRef('cutoff') },
+      ],
+    };
+    expect(lowerQuery(plan, { paramPrefix: 'b0_' }).surql).toBe(
+      'LET $b0_cutoff = $b0_p0;\nRETURN $b0_cutoff',
+    );
+    expect(lowerQuery(plan, { paramPrefix: 'b1_' }).surql).toBe(
+      'LET $b1_cutoff = $b1_p0;\nRETURN $b1_cutoff',
+    );
   });
 });

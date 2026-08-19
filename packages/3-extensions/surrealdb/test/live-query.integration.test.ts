@@ -1,5 +1,6 @@
 import { SurrealDriverImpl } from '@internal/driver-surrealdb/runtime';
 import type { SurrealLiveNotification } from '@internal/surreal-lowering';
+import { raw as rawText } from '@internal/surreal-query-ast';
 import { RecordId } from '@internal/surreal-value';
 import { renderCreateTableStatements } from '@internal/target-surrealdb/ddl';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -60,8 +61,7 @@ describe.skipIf(!available)('live queries', () => {
     });
   }
 
-  const raw = (statement: string): Promise<unknown> =>
-    db.execute(db.surql`${{ kind: 'raw', parts: [{ kind: 'text', text: statement }] }}`);
+  const raw = (statement: string): Promise<unknown> => db.execute(db.surql`${rawText(statement)}`);
 
   beforeAll(async () => {
     await db.connect();

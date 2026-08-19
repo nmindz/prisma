@@ -1,4 +1,5 @@
 import { SurrealDriverImpl } from '@internal/driver-surrealdb/runtime';
+import { field as fieldRef, raw as rawText } from '@internal/surreal-query-ast';
 import {
   buildSurrealSchemaIR,
   diffSurrealSchemas,
@@ -61,18 +62,14 @@ describe.skipIf(!available)('a TypeScript contract, end to end', () => {
   beforeAll(async () => {
     await db.connect();
     for (const table of ['person', 'follows']) {
-      await db.execute(
-        db.surql`REMOVE TABLE IF EXISTS ${{ kind: 'field', path: [{ kind: 'key', name: table }] }}`,
-      );
+      await db.execute(db.surql`REMOVE TABLE IF EXISTS ${fieldRef(table)}`);
     }
     // Apply the contract's own DDL.
     const namespaces = contract.storage.namespaces;
     for (const namespace of Object.values(namespaces)) {
       for (const [name, table] of Object.entries(namespace.entries.table ?? {})) {
         for (const statement of renderCreateTableStatements(name, table)) {
-          await db.execute(
-            db.surql`${{ kind: 'raw', parts: [{ kind: 'text', text: statement }] }}`,
-          );
+          await db.execute(db.surql`${rawText(statement)}`);
         }
       }
     }
@@ -110,9 +107,7 @@ describe.skipIf(!available)('a TypeScript contract, end to end', () => {
 
   it('reports no drift against the contract that produced the schema', async () => {
     const raw = async (surql: string): Promise<unknown> => {
-      for await (const row of db.query(
-        db.surql`${{ kind: 'raw', parts: [{ kind: 'text', text: surql }] }}`,
-      )) {
+      for await (const row of db.query(db.surql`${rawText(surql)}`)) {
         return row;
       }
       return undefined;

@@ -295,7 +295,7 @@ export function renderStatement(statement: SurrealStatement, ctx: RenderContext)
     case 'return':
       return `RETURN ${renderExpr(statement.expr, ctx, 'predicate')}`;
     case 'let':
-      return `LET $${statement.name} = ${renderExpr(statement.expr, ctx, 'write')}`;
+      return `LET $${ctx.letName(statement.name)} = ${renderExpr(statement.expr, ctx, 'write')}`;
     case 'live-select':
       return renderLiveSelect(statement, ctx);
     case 'kill':

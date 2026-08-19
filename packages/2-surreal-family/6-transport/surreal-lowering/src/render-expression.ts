@@ -7,6 +7,7 @@ import {
 import type {
   FieldPathSegment,
   GraphStep,
+  KnnDistance,
   KnnOperand,
   RecordIdKey,
   SurrealExpr,
@@ -14,16 +15,31 @@ import type {
 } from '@internal/surreal-query-ast';
 import type { RecordId } from '@internal/surreal-value';
 import { assertNever } from '@internal/utils/internal-error';
+import { loweringError } from './errors';
+
+const KNN_DISTANCES: ReadonlySet<KnnDistance> = new Set([
+  'CHEBYSHEV',
+  'COSINE',
+  'EUCLIDEAN',
+  'HAMMING',
+  'JACCARD',
+  'MANHATTAN',
+  'MINKOWSKI',
+  'PEARSON',
+]);
 
 /**
- * The two callbacks an expression renderer needs from its caller: how to turn
- * a bind site into text, and how to render a nested statement.
+ * The callbacks an expression renderer needs from its caller: how to turn a
+ * bind site into text, how to prefix a `LET` variable's name so a batched
+ * plan cannot reference another plan's variable, and how to render a nested
+ * statement.
  *
  * Passing them in rather than importing them keeps this module free of a
  * cycle with the statement renderer, which necessarily calls back into here.
  */
 export interface RenderContext {
   bind(param: Extract<SurrealExpr, { kind: 'param' }>, position: BindPosition): string;
+  letName(name: string): string;
   statement(statement: SurrealStatement): string;
 }
 
@@ -69,6 +85,12 @@ function renderPathSegment(segment: FieldPathSegment, ctx: RenderContext): strin
     case 'all':
       return '[*]';
     case 'index':
+      if (!Number.isInteger(segment.index) || segment.index < 0) {
+        throw loweringError(
+          'LOWERING.INVALID_PATH_INDEX',
+          `path index must be a non-negative integer, got ${segment.index}`,
+        );
+      }
       return `[${segment.index}]`;
     case 'where':
       // A path filter is a predicate wherever the path itself sits.
@@ -100,7 +122,22 @@ function renderGraphStep(step: GraphStep, ctx: RenderContext): string {
 }
 
 function renderKnnOperand(operand: KnnOperand): string {
-  return operand.kind === 'ef' ? String(operand.efSearch) : operand.distance;
+  if (operand.kind === 'ef') {
+    if (!Number.isSafeInteger(operand.efSearch) || operand.efSearch <= 0) {
+      throw loweringError(
+        'LOWERING.INVALID_KNN_EF',
+        `KNN ef-search must be a positive safe integer, got ${operand.efSearch}`,
+      );
+    }
+    return String(operand.efSearch);
+  }
+  if (!KNN_DISTANCES.has(operand.distance)) {
+    throw loweringError(
+      'LOWERING.INVALID_KNN_DISTANCE',
+      `KNN distance metric must be one of ${[...KNN_DISTANCES].join(', ')}, got ${operand.distance}`,
+    );
+  }
+  return operand.distance;
 }
 
 function renderLiteral(value: string | number | boolean | null): string {
@@ -145,6 +182,8 @@ export function renderExpr(expr: SurrealExpr, ctx: RenderContext, position: Bind
       return renderLiteral(expr.value);
     case 'param':
       return ctx.bind(expr, position);
+    case 'let-ref':
+      return `$${ctx.letName(expr.name)}`;
     case 'record-id':
       return renderRecordId(expr.recordId);
     case 'field':
@@ -185,6 +224,12 @@ export function renderExpr(expr: SurrealExpr, ctx: RenderContext, position: Bind
     case 'knn':
       // The KNN operator is the planner's entry point into the vector index,
       // so neither operand may be cast.
+      if (!Number.isSafeInteger(expr.k) || expr.k <= 0) {
+        throw loweringError(
+          'LOWERING.INVALID_KNN_K',
+          `KNN k must be a positive safe integer, got ${expr.k}`,
+        );
+      }
       return `${predicate(expr.field)} <|${expr.k},${renderKnnOperand(expr.operand)}|> ${predicate(expr.vector)}`;
     case 'raw':
       return expr.parts

@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SurrealStorageShape } from '@internal/surreal-contract/types';
-import type { RawStatement, SurrealExpr } from '@internal/surreal-query-ast';
-import { param } from '@internal/surreal-query-ast';
+import type { RawStatement } from '@internal/surreal-query-ast';
+import { isSurrealExprNode, param } from '@internal/surreal-query-ast';
 import type { SurrealQueryPlan } from '@internal/surreal-query-ast/plan';
 
 /**
@@ -9,23 +9,18 @@ import type { SurrealQueryPlan } from '@internal/surreal-query-ast/plan';
  *
  * Interpolations become bound parameters, never text: `` surql`SELECT * FROM
  * person WHERE name = ${name}` `` sends `$p0` and the value beside it. The
- * only way to interpolate SurrealQL *syntax* is to build an AST node, which
- * is deliberate — a template that spliced strings would be the injection
- * hole this exists to avoid.
+ * only way to interpolate SurrealQL *syntax* is to build an AST node — and
+ * that claim is enforced, not just documented: `isSurrealExprNode` checks a
+ * brand a query-ast builder attaches at construction time, so a JSON payload
+ * shaped like a node (say, `{ kind: 'raw', parts: [...] }` decoded off the
+ * wire) is application data here, not structure, no matter how convincingly
+ * it looks like one. A duck-typed `'kind' in value` check would have let that
+ * payload splice as SurrealQL text; the brand is what a value cannot forge.
  */
 export type RawLane<TContract extends Contract<SurrealStorageShape>> = <Row = unknown>(
   strings: TemplateStringsArray,
   ...values: readonly unknown[]
 ) => SurrealQueryPlan<Row> & { readonly _contract?: TContract };
-
-function isExpr(value: unknown): value is SurrealExpr {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'kind' in value &&
-    typeof Reflect.get(value, 'kind') === 'string'
-  );
-}
 
 export function createRawLane<TContract extends Contract<SurrealStorageShape>>(options: {
   readonly contract: TContract;
@@ -40,7 +35,7 @@ export function createRawLane<TContract extends Contract<SurrealStorageShape>>(o
           kind: 'expr',
           // An already-built AST node is spliced as structure; anything else is
           // application data and becomes a bind site.
-          expr: isExpr(value) ? value : param(`p${index}`, value),
+          expr: isSurrealExprNode(value) ? value : param(`p${index}`, value),
         });
       }
     });

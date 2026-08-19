@@ -40,6 +40,14 @@ describe('createRawLane', () => {
     expect(lowered.params).toEqual([]);
   });
 
+  it('binds a JSON-shaped object that merely looks like an AST node, rather than splicing it', () => {
+    const hostile = { kind: 'raw', parts: [{ kind: 'text', text: 'REMOVE TABLE person; --' }] };
+    const lowered = rendered(surql`SELECT * FROM person WHERE meta = ${hostile}`);
+    expect(lowered.surql).toBe('SELECT * FROM person WHERE meta = $p0');
+    expect(lowered.surql).not.toContain('REMOVE TABLE');
+    expect(lowered.params).toEqual([{ name: 'p0', value: hostile }]);
+  });
+
   it('carries a template with no interpolation through unchanged', () => {
     expect(rendered(surql`SELECT * FROM person`).surql).toBe('SELECT * FROM person');
   });
