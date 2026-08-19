@@ -6,7 +6,7 @@ import type {
   SurrealQuery,
   SurrealStatement,
 } from '@internal/surreal-query-ast';
-import { all, field, obj } from '@internal/surreal-query-ast';
+import { all, field, fn, obj } from '@internal/surreal-query-ast';
 import type { SurrealQueryPlan, SurrealResultShape } from '@internal/surreal-query-ast/plan';
 import { RecordId } from '@internal/surreal-value';
 import { structuredError } from '@internal/utils/structured-error';
@@ -25,7 +25,13 @@ export interface FindManyArgs {
   readonly limit?: number;
   /** SurrealQL spells the offset `START`; there is no `OFFSET`. */
   readonly start?: number;
-  /** `FETCH` — replaces a `record<>` link with the record it points at. */
+  /**
+   * `FETCH` — replaces a `record<>` link with the record it points at.
+   *
+   * This is SurrealQL's mechanism for the role `include` plays in the SQL
+   * and Mongo lanes. There is no separate `include` method here because
+   * `FETCH` is already a first-class clause on every read.
+   */
   readonly fetch?: readonly string[];
 }
 
@@ -47,6 +53,14 @@ export interface CreateArgs {
   /** A specific record id, rather than one SurrealDB generates. */
   readonly id?: RecordKeyInput;
   readonly select?: SelectInput;
+}
+
+export interface UpsertArgs {
+  /** The record to create if absent, or update in place if present. */
+  readonly id: RecordKeyInput;
+  readonly data: Readonly<Record<string, unknown>>;
+  /** `MERGE` keeps unlisted fields; the default `CONTENT` replaces the record. */
+  readonly merge?: boolean;
 }
 
 export interface UpdateArgs {
@@ -78,6 +92,38 @@ export interface TraverseArgs {
   /** The table the hop lands on, when the edge has one. */
   readonly to?: string;
   readonly select?: readonly string[];
+}
+
+/**
+ * The aggregate functions `groupBy` exposes, each verified directly against
+ * a live SurrealDB v3.2.4 server before being wired here. `avg` lowers to
+ * `math::mean` — SurrealQL has no `math::avg`.
+ */
+export type AggregateFn = 'count' | 'sum' | 'avg' | 'max' | 'min';
+
+const AGGREGATE_FN_NAME: Readonly<Record<AggregateFn, string>> = {
+  count: 'count',
+  sum: 'math::sum',
+  avg: 'math::mean',
+  max: 'math::max',
+  min: 'math::min',
+};
+
+/**
+ * One aggregate projection. `count` takes no argument; every other function
+ * runs over a named field.
+ */
+export interface AggregateSelector {
+  readonly fn: AggregateFn;
+  readonly field?: string;
+}
+
+export interface GroupByArgs {
+  /** Fields to group by. Omitted or empty groups the whole table (`GROUP ALL`). */
+  readonly by?: readonly string[];
+  /** Aggregate projections, keyed by the alias each comes back under. */
+  readonly aggregate: Readonly<Record<string, AggregateSelector>>;
+  readonly where?: WhereInput;
 }
 
 function orderTerms(orderBy: FindManyArgs['orderBy']): readonly OrderTerm[] {
@@ -307,6 +353,65 @@ export class SurrealCollection<Row = Record<string, unknown>> {
     );
   }
 
+  /**
+   * `SELECT <by>, <aggregates> FROM t GROUP BY <by>` — or `GROUP ALL` when
+   * `by` is omitted, aggregating the whole table into one row.
+   *
+   * SurrealQL requires every non-aggregate projected field to be one of the
+   * grouped fields, the same rule `findMany` enforces between `select` and
+   * `orderBy` (see `selectFor`). There is no separate `select` here to
+   * reconcile against: the projection is always exactly the grouped fields
+   * followed by the aggregates, so the rule holds by construction.
+   *
+   * Rows come back as `Record<string, unknown>` — one key per grouped field,
+   * one per aggregate alias — mirroring how the rest of this lane types
+   * untransformed read results.
+   */
+  groupBy(args: GroupByArgs): SurrealQueryPlan<Record<string, unknown>> {
+    const aggregateEntries = Object.entries(args.aggregate);
+    if (aggregateEntries.length === 0) {
+      throw structuredError(
+        'RUNTIME.AST_INVALID',
+        'groupBy requires at least one aggregate projection',
+        { meta: { table: this.#table } },
+      );
+    }
+    for (const [alias, selector] of aggregateEntries) {
+      if (selector.fn !== 'count' && selector.field === undefined) {
+        throw structuredError(
+          'RUNTIME.AST_INVALID',
+          `groupBy aggregate "${alias}" uses "${selector.fn}", which requires a field`,
+          { meta: { table: this.#table, alias, fn: selector.fn } },
+        );
+      }
+    }
+
+    const params = new ParamAllocator();
+    const where = compileWhere(args.where, params);
+    const by = args.by ?? [];
+    const grouped: Projection[] = by.map((name) => ({ expr: field(name) }));
+    const aggregates: Projection[] = aggregateEntries.map(([alias, selector]) => ({
+      expr: fn(
+        AGGREGATE_FN_NAME[selector.fn],
+        ...(selector.field === undefined ? [] : [field(selector.field)]),
+      ),
+      alias,
+    }));
+
+    return plan<Record<string, unknown>>(
+      [
+        {
+          kind: 'select',
+          projections: [...grouped, ...aggregates],
+          from: [{ kind: 'table', name: this.#table }],
+          ...(where === undefined ? {} : { where }),
+          ...(by.length === 0 ? { groupAll: true } : { groupBy: by.map((name) => field(name)) }),
+        },
+      ],
+      this.#storageHash,
+    );
+  }
+
   create(args: CreateArgs): SurrealQueryPlan<Row> {
     const params = new ParamAllocator();
     return plan<Row>(
@@ -315,6 +420,45 @@ export class SurrealCollection<Row = Record<string, unknown>> {
           kind: 'create',
           target: targetFor(this.#table, args.id),
           payload: { kind: 'content', value: contentOf(args.data, params) },
+          returns: { kind: 'after' },
+        },
+      ],
+      this.#storageHash,
+      this.#resultShape,
+    );
+  }
+
+  /**
+   * `UPSERT table:id ...` — create-or-update in one write, keyed by a
+   * specific record id.
+   *
+   * Unlike `sql-orm-client`'s `upsert`, which splits `where`, `create`, and
+   * `update` into three payloads because SQL has no single create-or-update
+   * statement, SurrealQL's `UPSERT` takes exactly one payload: `data`
+   * becomes the whole record if `id` doesn't exist yet, or is applied to
+   * the existing one — `CONTENT` (the default) replaces it, `MERGE` keeps
+   * unlisted fields — if it does.
+   *
+   * Only the record-id form is exposed. SurrealDB also allows `UPSERT
+   * table SET ... WHERE ...` over a whole table, but that form isn't
+   * id-keyed: verified against a live server, a `WHERE` that matches no
+   * rows still creates one, with a server-generated id unrelated to the
+   * filter — not the idempotent, keyed upsert this method's name promises.
+   * Reach for `create`/`update` directly if that unfiltered-write behavior
+   * is actually what's wanted.
+   */
+  upsert(args: UpsertArgs): SurrealQueryPlan<Row> {
+    const params = new ParamAllocator();
+    const content = contentOf(args.data, params);
+    return plan<Row>(
+      [
+        {
+          kind: 'upsert',
+          target: targetFor(this.#table, args.id),
+          payload:
+            args.merge === true
+              ? { kind: 'merge', value: content }
+              : { kind: 'content', value: content },
           returns: { kind: 'after' },
         },
       ],

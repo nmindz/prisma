@@ -107,6 +107,73 @@ describe('count', () => {
   });
 });
 
+describe('groupBy', () => {
+  it('groups by a field, projecting the grouped field alongside the aggregate', () => {
+    expect(
+      surql(person.groupBy({ by: ['team'], aggregate: { total: { fn: 'sum', field: 'age' } } }))
+        .surql,
+    ).toBe('SELECT `team`, math::sum(`age`) AS `total` FROM `person` GROUP BY `team`');
+  });
+
+  it('aggregates the whole table with GROUP ALL when by is omitted', () => {
+    expect(surql(person.groupBy({ aggregate: { n: { fn: 'count' } } })).surql).toBe(
+      'SELECT count() AS `n` FROM `person` GROUP ALL',
+    );
+  });
+
+  it('renders every verified aggregate function', () => {
+    expect(
+      surql(
+        person.groupBy({
+          by: ['team'],
+          aggregate: {
+            n: { fn: 'count' },
+            total: { fn: 'sum', field: 'age' },
+            avg: { fn: 'avg', field: 'age' },
+            hi: { fn: 'max', field: 'age' },
+            lo: { fn: 'min', field: 'age' },
+          },
+        }),
+      ).surql,
+    ).toBe(
+      'SELECT `team`, count() AS `n`, math::sum(`age`) AS `total`, math::mean(`age`) AS `avg`, math::max(`age`) AS `hi`, math::min(`age`) AS `lo` FROM `person` GROUP BY `team`',
+    );
+  });
+
+  it('groups by more than one field, projecting all of them', () => {
+    expect(
+      surql(
+        person.groupBy({
+          by: ['team', 'region'],
+          aggregate: { n: { fn: 'count' } },
+        }),
+      ).surql,
+    ).toBe('SELECT `team`, `region`, count() AS `n` FROM `person` GROUP BY `team`, `region`');
+  });
+
+  it('filters before grouping', () => {
+    expect(
+      surql(
+        person.groupBy({
+          by: ['team'],
+          aggregate: { total: { fn: 'sum', field: 'age' } },
+          where: { active: true },
+        }),
+      ).surql,
+    ).toBe(
+      'SELECT `team`, math::sum(`age`) AS `total` FROM `person` WHERE `active` = $p0 GROUP BY `team`',
+    );
+  });
+
+  it('rejects an aggregate spec with no selectors', () => {
+    expect(() => person.groupBy({ aggregate: {} })).toThrow(/at least one/);
+  });
+
+  it('rejects a non-count aggregate missing its field', () => {
+    expect(() => person.groupBy({ aggregate: { total: { fn: 'sum' } } })).toThrow(/field/);
+  });
+});
+
 describe('mutations', () => {
   it('creates with CONTENT and returns the written record', () => {
     const lowered = surql(person.create({ data: { name: 'ada', age: 36 } }));
@@ -138,6 +205,28 @@ describe('mutations', () => {
     expect(surql(person.delete({ where: { age: { lt: 1 } } })).surql).toBe(
       'DELETE `person` WHERE `age` < $p0 RETURN BEFORE',
     );
+  });
+});
+
+describe('upsert', () => {
+  it('creates-or-updates a record by id with CONTENT', () => {
+    const lowered = surql(person.upsert({ id: 'ada', data: { name: 'ada', age: 36 } }));
+    expect(lowered.surql).toBe(
+      'UPSERT `person`:`ada` CONTENT { `name`: $p0, `age`: $p1 } RETURN AFTER',
+    );
+    expect(lowered.params.map((p) => p.value)).toEqual(['ada', 36]);
+  });
+
+  it('merges into an existing record with MERGE', () => {
+    expect(surql(person.upsert({ id: 'ada', data: { age: 37 }, merge: true })).surql).toBe(
+      'UPSERT `person`:`ada` MERGE { `age`: $p0 } RETURN AFTER',
+    );
+  });
+
+  it('accepts a RecordId a read produced', () => {
+    expect(
+      surql(person.upsert({ id: new RecordId('person', 'ada'), data: { age: 40 } })).surql,
+    ).toBe('UPSERT `person`:`ada` CONTENT { `age`: $p0 } RETURN AFTER');
   });
 });
 
