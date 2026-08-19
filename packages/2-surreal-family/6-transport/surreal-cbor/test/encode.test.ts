@@ -10,6 +10,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { decodeCbor } from '../src/decode';
 import { encodeCbor, SURREAL_NONE } from '../src/encode';
+import { CBOR_TAG, tagged } from '../src/tags';
 
 const hex = (value: unknown): string =>
   Array.from(encodeCbor(value))
@@ -36,6 +37,22 @@ describe('encoding to the bytes SurrealDB emits for the same value', () => {
     ['NONE', SURREAL_NONE, 'c6f6'],
     ['null', null, 'f6'],
     ['bytes', new SurrealBytes(new Uint8Array([0x68, 0x69])), '426869'],
+    [
+      'inclusive range',
+      tagged(CBOR_TAG.RANGE, [
+        tagged(CBOR_TAG.BOUND_INCLUSIVE, 1),
+        tagged(CBOR_TAG.BOUND_INCLUSIVE, 5),
+      ]),
+      'd83182d83201d83205',
+    ],
+    [
+      'half-open range',
+      tagged(CBOR_TAG.RANGE, [
+        tagged(CBOR_TAG.BOUND_INCLUSIVE, 1),
+        tagged(CBOR_TAG.BOUND_EXCLUSIVE, 5),
+      ]),
+      'd83182d83201d83305',
+    ],
   ])('%s', (_label, value, expected) => {
     expect(hex(value)).toBe(expected);
   });
@@ -94,5 +111,76 @@ describe('encoding to the bytes SurrealDB emits for the same value', () => {
   it('grows its buffer past the initial size', () => {
     const long = 'x'.repeat(5000);
     expect(decodeCbor(encodeCbor({ long }))).toEqual({ long });
+  });
+
+  it('round-trips an inclusive range', () => {
+    const value = tagged(CBOR_TAG.RANGE, [
+      tagged(CBOR_TAG.BOUND_INCLUSIVE, 1),
+      tagged(CBOR_TAG.BOUND_INCLUSIVE, 5),
+    ]);
+    expect(decodeCbor(encodeCbor(value))).toEqual(value);
+  });
+
+  it('round-trips a half-open range', () => {
+    const value = tagged(CBOR_TAG.RANGE, [
+      tagged(CBOR_TAG.BOUND_INCLUSIVE, 1),
+      tagged(CBOR_TAG.BOUND_EXCLUSIVE, 5),
+    ]);
+    expect(decodeCbor(encodeCbor(value))).toEqual(value);
+  });
+});
+
+describe('negative zero', () => {
+  it('encodes -0 the same as 0, matching @surrealdb/cbor', () => {
+    expect(hex(-0)).toBe(hex(0));
+    expect(hex(-0)).toBe('00');
+  });
+});
+
+describe('integer number bounds', () => {
+  it('encodes an integer at the 2^53 boundary', () => {
+    expect(() => encodeCbor(2 ** 53)).not.toThrow();
+    expect(() => encodeCbor(-(2 ** 53))).not.toThrow();
+  });
+
+  it('rejects an integer past 2^53', () => {
+    expect(() => encodeCbor(2 ** 53 + 2)).toThrow(/exceeds ±2\^53/);
+  });
+
+  it('rejects an integer past -2^53', () => {
+    expect(() => encodeCbor(-(2 ** 53 + 2))).toThrow(/exceeds ±2\^53/);
+  });
+});
+
+describe('bigint bounds', () => {
+  it('encodes a bigint at the ±2^64 boundary', () => {
+    expect(() => encodeCbor(2n ** 64n - 1n)).not.toThrow();
+    expect(() => encodeCbor(-(2n ** 64n))).not.toThrow();
+  });
+
+  it('rejects a bigint at or past 2^64', () => {
+    expect(() => encodeCbor(2n ** 64n)).toThrow(/exceeds ±2\^64/);
+  });
+
+  it('rejects a bigint past -2^64', () => {
+    expect(() => encodeCbor(-(2n ** 64n) - 1n)).toThrow(/exceeds ±2\^64/);
+  });
+});
+
+describe('zero-arity duration', () => {
+  it('encodes a zero duration as an empty array, not [0]', () => {
+    expect(hex(new SurrealDuration('0ns'))).toBe('ce80');
+  });
+
+  it('round-trips a zero duration', () => {
+    const value = new SurrealDuration('0ns');
+    expect(decodeCbor(encodeCbor(value))).toEqual(value);
+  });
+});
+
+describe('NONE byte parity with @surrealdb/cbor', () => {
+  it('encodes bare undefined identically to SURREAL_NONE', () => {
+    expect(hex(undefined)).toBe(hex(SURREAL_NONE));
+    expect(hex(undefined)).toBe('c6f6');
   });
 });

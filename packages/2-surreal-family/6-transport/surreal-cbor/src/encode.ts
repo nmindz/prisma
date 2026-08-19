@@ -16,6 +16,21 @@ const MAJOR_TAG = 6;
 /** Hoisted: constructing one per string dominated the encoder's cost. */
 const TEXT_ENCODER = new TextEncoder();
 
+/**
+ * `@surrealdb/cbor`'s own bound for an integer `number`: its encoder only
+ * routes an integer through the plain unsigned/negative heads within ±2^53
+ * inclusive (`Number.isSafeInteger`'s bound, plus the one value past it the
+ * SDK still allows). Anything further should have been a `bigint`.
+ */
+const MAX_SAFE_DOUBLE_INTEGER = 2 ** 53;
+
+/**
+ * `@surrealdb/cbor`'s own bound for a `bigint`: its unsigned magnitude must
+ * fit the 64 bits a CBOR major-0/1 head can carry — `[0, 2^64)` positive,
+ * `[-2^64, 0]` negative.
+ */
+const MAX_UNSIGNED_BIGINT = 2n ** 64n;
+
 const GEOMETRY_TAGS: Readonly<Record<string, number>> = {
   Point: CBOR_TAG.GEOMETRY_POINT,
   LineString: CBOR_TAG.GEOMETRY_LINE,
@@ -27,11 +42,14 @@ const GEOMETRY_TAGS: Readonly<Record<string, number>> = {
 };
 
 /**
- * The absent value. Encoded as tag 6, which is what makes CBOR able to say
- * "this field has no value" as distinct from "this field is null" — the one
- * distinction the JSON protocol cannot carry.
+ * The absent value. Encoded as tag 6 wrapping `null` — byte-for-byte what
+ * `@surrealdb/cbor`'s own encoder produces: it maps a bare `undefined`
+ * through its replacer to `Tagged(6, null)`, the same two bytes-plus-head
+ * this encoder writes. (The bare simple value `0xf7` is what that SDK emits
+ * only when its replacer is bypassed; this codec's decoder still reads that
+ * shorter form back to `undefined` for compatibility with such payloads.)
  */
-export const SURREAL_NONE = Symbol.for('@internal/surreal-cbor/NONE');
+export const SURREAL_NONE = Symbol.for('prisma.surreal.cbor.none');
 
 /** Encodes a SurrealDB value model instance to its CBOR wire form. */
 export function encodeCbor(value: unknown): Uint8Array {
@@ -57,11 +75,20 @@ function writeValue(writer: CborWriter, value: unknown): void {
 
   if (typeof value === 'number') {
     if (!Number.isInteger(value)) writer.float64(value);
+    else if (Math.abs(value) > MAX_SAFE_DOUBLE_INTEGER) {
+      throw new InternalError(`Cannot encode ${value} as a CBOR integer: exceeds ±2^53`);
+    }
+    // `-0` deliberately falls into this same unsigned-zero path as `0`: CBOR
+    // has no negative-zero integer, and `@surrealdb/cbor`'s own encoder drops
+    // the sign the same way.
     else if (value >= 0) writer.head(MAJOR_UNSIGNED, value);
     else writer.head(MAJOR_NEGATIVE, -value - 1);
     return;
   }
   if (typeof value === 'bigint') {
+    if (value >= MAX_UNSIGNED_BIGINT || value < -MAX_UNSIGNED_BIGINT) {
+      throw new InternalError(`Cannot encode ${value}n as a CBOR integer: exceeds ±2^64`);
+    }
     if (value >= 0n) writer.head(MAJOR_UNSIGNED, value);
     else writer.head(MAJOR_NEGATIVE, -value - 1n);
     return;
@@ -162,7 +189,10 @@ function writeModelValue(writer: CborWriter, kind: SurrealValueKind, value: unkn
       return;
     case 'duration': {
       const [seconds, nanos] = durationToParts(String(payload));
-      writeTagged(writer, CBOR_TAG.DURATION, nanos === 0 ? [seconds] : [seconds, nanos]);
+      // Matches the official SDK's `Duration.toCompact()`: drop trailing
+      // zero parts down to `[]` for a zero duration, not `[0]`.
+      const parts = seconds === 0 && nanos === 0 ? [] : nanos === 0 ? [seconds] : [seconds, nanos];
+      writeTagged(writer, CBOR_TAG.DURATION, parts);
       return;
     }
     case 'uuid':

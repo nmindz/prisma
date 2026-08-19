@@ -4,6 +4,12 @@ export { isParamRef, SurrealParamRef } from '../param-ref';
 export type { RecordIdPart } from '../record-id';
 export { isRecordId, RecordId } from '../record-id';
 export {
+  isSurrealBytes,
+  isSurrealDatetime,
+  isSurrealDecimal,
+  isSurrealDuration,
+  isSurrealGeometry,
+  isSurrealUuid,
   SurrealBytes,
   SurrealDatetime,
   SurrealDecimal,

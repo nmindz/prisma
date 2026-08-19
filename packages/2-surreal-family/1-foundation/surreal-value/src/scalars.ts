@@ -1,4 +1,5 @@
-import { SURREAL_KIND, type SurrealValueKind } from './kind';
+import type { SurrealValueKind } from './kind';
+import { SURREAL_KIND, surrealKind } from './kind';
 
 /**
  * SurrealQL scalar types that JSON cannot represent on its own.
@@ -66,6 +67,10 @@ export class SurrealDatetime extends TaggedScalar<string> {
   }
 }
 
+export function isSurrealDatetime(value: unknown): value is SurrealDatetime {
+  return surrealKind(value) === 'datetime';
+}
+
 function partsOf(value: string | Date | readonly [number, number]): readonly [number, number] {
   if (Array.isArray(value)) return [Number(value[0]), Number(value[1])];
   const iso = value instanceof Date ? value.toISOString() : String(value);
@@ -102,6 +107,10 @@ export class SurrealDecimal extends TaggedScalar<string> {
   }
 }
 
+export function isSurrealDecimal(value: unknown): value is SurrealDecimal {
+  return surrealKind(value) === 'decimal';
+}
+
 /** A SurrealQL duration, in its compact text form (`1h30m`, `500ms`). */
 export class SurrealDuration extends TaggedScalar<string> {
   readonly [SURREAL_KIND] = 'duration' as const;
@@ -114,6 +123,10 @@ export class SurrealDuration extends TaggedScalar<string> {
   }
 }
 
+export function isSurrealDuration(value: unknown): value is SurrealDuration {
+  return surrealKind(value) === 'duration';
+}
+
 /** A UUID, in canonical hyphenated text form. */
 export class SurrealUuid extends TaggedScalar<string> {
   readonly [SURREAL_KIND] = 'uuid' as const;
@@ -124,6 +137,10 @@ export class SurrealUuid extends TaggedScalar<string> {
     this.value = value;
     Object.freeze(this);
   }
+}
+
+export function isSurrealUuid(value: unknown): value is SurrealUuid {
+  return surrealKind(value) === 'uuid';
 }
 
 /**
@@ -148,6 +165,10 @@ export class SurrealBytes extends TaggedScalar<Uint8Array> {
   override toJSON(): Uint8Array {
     return this.value;
   }
+}
+
+export function isSurrealBytes(value: unknown): value is SurrealBytes {
+  return surrealKind(value) === 'bytes';
 }
 
 /**
@@ -179,4 +200,8 @@ export class SurrealGeometry extends TaggedScalar<{
   override toString(): string {
     return `<geometry:${this.value.type}>`;
   }
+}
+
+export function isSurrealGeometry(value: unknown): value is SurrealGeometry {
+  return surrealKind(value) === 'geometry';
 }

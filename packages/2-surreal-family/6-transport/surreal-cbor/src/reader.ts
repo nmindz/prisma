@@ -27,6 +27,10 @@ export class CborReader {
     return this.offset >= this.bytes.length;
   }
 
+  get remaining(): number {
+    return this.bytes.length - this.offset;
+  }
+
   private need(count: number): void {
     if (this.offset + count > this.bytes.length) {
       throw new InternalError('Truncated CBOR payload from SurrealDB');
