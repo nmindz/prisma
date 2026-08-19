@@ -1,4 +1,6 @@
-import type { SurrealIndex } from '@internal/surreal-contract';
+import type { SurrealField, SurrealIndex } from '@internal/surreal-contract';
+import { renderSurrealType, unwrapOptional } from '@internal/surreal-contract';
+import type { SurrealFieldType, SurrealScalarTypeName } from '@internal/surreal-contract/types';
 import type {
   OrderTerm,
   Projection,
@@ -10,6 +12,7 @@ import type {
 import { all, and, arr, binary, field, fn, letRef, obj } from '@internal/surreal-query-ast';
 import type { SurrealQueryPlan, SurrealResultShape } from '@internal/surreal-query-ast/plan';
 import { RecordId } from '@internal/surreal-value';
+import { assertNever } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { compileWhere, ParamAllocator, type WhereInput } from './filters';
 
@@ -150,6 +153,117 @@ export interface GroupByArgs {
   /** Aggregate projections, keyed by the alias each comes back under. */
   readonly aggregate: Readonly<Record<string, AggregateSelector>>;
   readonly where?: WhereInput;
+}
+
+const NUMERIC_SCALARS: ReadonlySet<SurrealScalarTypeName> = new Set([
+  'int',
+  'float',
+  'decimal',
+  'number',
+]);
+
+type AggregateFieldClass = 'numeric' | 'datetime' | 'string' | 'unsupported';
+
+function classifyAggregateFieldType(type: SurrealFieldType): AggregateFieldClass {
+  const resolved = unwrapOptional(type);
+  if (resolved.kind === 'scalar') {
+    if (NUMERIC_SCALARS.has(resolved.name)) return 'numeric';
+    if (resolved.name === 'datetime') return 'datetime';
+    if (resolved.name === 'string') return 'string';
+  }
+  return 'unsupported';
+}
+
+/**
+ * Builds one aggregate's projection expression, dispatching `max`/`min` and
+ * `sum`/`avg` on the target field's declared type — each function form
+ * verified directly against a live SurrealDB v3.2.4 server:
+ * `math::max`/`math::min` for numeric fields, `time::max`/`time::min` for
+ * `datetime`, and the grouped-array form `array::max(array::group(field))`/
+ * `array::min(array::group(field))` for `string` — the plain, non-grouped
+ * `array::max`/`array::min` were not the form verified live for this
+ * context and are deliberately not used here.
+ *
+ * A field type SurrealDB has no verified `max`/`min` lowering for (bool,
+ * bytes, geometry, record, duration, uuid, and anything else not named
+ * above) throws rather than emitting `math::max`/`math::min`, which
+ * type-errors or silently degrades on those types instead of raising.
+ *
+ * When the table's fields are unknown — an open-map, JSON-loaded contract
+ * with no storage detail, or a field name absent from the known list — the
+ * pre-existing `math::*` lowering is kept unchanged, so untyped usage of
+ * this lane does not regress.
+ */
+function aggregateProjectionExpr(
+  table: string,
+  fields: ReadonlyArray<SurrealField> | undefined,
+  alias: string,
+  selector: AggregateSelector,
+): SurrealExpr {
+  if (selector.fn === 'count') return fn('count');
+
+  const fieldName = selector.field;
+  if (fieldName === undefined) {
+    throw structuredError(
+      'RUNTIME.AST_INVALID',
+      `groupBy aggregate "${alias}" uses "${selector.fn}", which requires a field`,
+      { meta: { table, alias, fn: selector.fn } },
+    );
+  }
+  const fieldType = fields?.find((candidate) => candidate.name === fieldName)?.type;
+
+  if (fieldType === undefined) {
+    return fn(AGGREGATE_FN_NAME[selector.fn], field(fieldName));
+  }
+
+  const fieldClass = classifyAggregateFieldType(fieldType);
+
+  if (selector.fn === 'sum' || selector.fn === 'avg') {
+    if (fieldClass !== 'numeric') {
+      throw structuredError(
+        'RUNTIME.AGGREGATE_FIELD_TYPE_NOT_NUMERIC',
+        `groupBy aggregate "${alias}" cannot use "${selector.fn}" on field "${fieldName}" (type ${renderSurrealType(fieldType)}): ${selector.fn} requires a numeric field`,
+        {
+          meta: {
+            table,
+            alias,
+            fn: selector.fn,
+            field: fieldName,
+            fieldType: renderSurrealType(fieldType),
+          },
+        },
+      );
+    }
+    return fn(AGGREGATE_FN_NAME[selector.fn], field(fieldName));
+  }
+
+  switch (fieldClass) {
+    case 'numeric':
+      return fn(AGGREGATE_FN_NAME[selector.fn], field(fieldName));
+    case 'datetime':
+      return fn(selector.fn === 'max' ? 'time::max' : 'time::min', field(fieldName));
+    case 'string':
+      return fn(
+        selector.fn === 'max' ? 'array::max' : 'array::min',
+        fn('array::group', field(fieldName)),
+      );
+    case 'unsupported':
+      throw structuredError(
+        'RUNTIME.AGGREGATE_FIELD_TYPE_UNSUPPORTED',
+        `groupBy aggregate "${alias}" cannot use "${selector.fn}" on field "${fieldName}" (type ${renderSurrealType(fieldType)}): no verified SurrealQL ${selector.fn} lowering for this type`,
+        {
+          meta: {
+            table,
+            alias,
+            fn: selector.fn,
+            field: fieldName,
+            fieldType: renderSurrealType(fieldType),
+          },
+        },
+      );
+    default:
+      return assertNever(fieldClass);
+  }
 }
 
 function orderTerms(orderBy: FindManyArgs['orderBy']): readonly OrderTerm[] {
@@ -318,17 +432,20 @@ export class SurrealCollection<Row = Record<string, unknown>> {
   readonly #storageHash: string;
   readonly #resultShape: SurrealResultShape | undefined;
   readonly #uniqueIndexes: ReadonlyArray<SurrealIndex>;
+  readonly #fields: ReadonlyArray<SurrealField> | undefined;
 
   constructor(
     table: string,
     storageHash: string,
     resultShape?: SurrealResultShape,
     indexes?: ReadonlyArray<SurrealIndex>,
+    fields?: ReadonlyArray<SurrealField>,
   ) {
     this.#table = table;
     this.#storageHash = storageHash;
     this.#resultShape = resultShape;
     this.#uniqueIndexes = (indexes ?? []).filter((index) => index.variant.kind === 'unique');
+    this.#fields = fields;
   }
 
   findMany(args: FindManyArgs = {}): SurrealQueryPlan<Row> {
@@ -462,10 +579,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
     const by = args.by ?? [];
     const grouped: Projection[] = by.map((name) => ({ expr: field(name) }));
     const aggregates: Projection[] = aggregateEntries.map(([alias, selector]) => ({
-      expr: fn(
-        AGGREGATE_FN_NAME[selector.fn],
-        ...(selector.field === undefined ? [] : [field(selector.field)]),
-      ),
+      expr: aggregateProjectionExpr(this.#table, this.#fields, alias, selector),
       alias,
     }));
 

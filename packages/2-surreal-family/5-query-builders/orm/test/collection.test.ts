@@ -1,4 +1,4 @@
-import { SurrealIndex } from '@internal/surreal-contract';
+import { SurrealField, SurrealIndex } from '@internal/surreal-contract';
 import { lowerQuery } from '@internal/surreal-lowering';
 import { RecordId } from '@internal/surreal-value';
 import { describe, expect, it } from 'vitest';
@@ -6,6 +6,36 @@ import { SurrealCollection } from '../src/collection';
 
 const person = new SurrealCollection('person', 'sh');
 const surql = (plan: { query: Parameters<typeof lowerQuery>[0] }) => lowerQuery(plan.query);
+
+const metricFields: ReadonlyArray<SurrealField> = [
+  new SurrealField({ name: 'unit', type: { kind: 'scalar', name: 'string' }, codecId: 'string' }),
+  new SurrealField({ name: 'score', type: { kind: 'scalar', name: 'int' }, codecId: 'int' }),
+  new SurrealField({ name: 'ratio', type: { kind: 'scalar', name: 'float' }, codecId: 'float' }),
+  new SurrealField({
+    name: 'startedAt',
+    type: { kind: 'scalar', name: 'datetime' },
+    codecId: 'datetime',
+  }),
+  new SurrealField({ name: 'label', type: { kind: 'scalar', name: 'string' }, codecId: 'string' }),
+  new SurrealField({ name: 'active', type: { kind: 'scalar', name: 'bool' }, codecId: 'bool' }),
+  new SurrealField({ name: 'payload', type: { kind: 'scalar', name: 'bytes' }, codecId: 'bytes' }),
+  new SurrealField({
+    name: 'ttl',
+    type: { kind: 'scalar', name: 'duration' },
+    codecId: 'duration',
+  }),
+  new SurrealField({ name: 'externalId', type: { kind: 'scalar', name: 'uuid' }, codecId: 'uuid' }),
+  new SurrealField({
+    name: 'owner',
+    type: { kind: 'record', tables: ['person'] },
+    codecId: 'record',
+  }),
+  new SurrealField({
+    name: 'location',
+    type: { kind: 'geometry', shapes: ['point'] },
+    codecId: 'geometry',
+  }),
+];
 
 describe('findMany', () => {
   it('selects everything by default', () => {
@@ -172,6 +202,143 @@ describe('groupBy', () => {
 
   it('rejects a non-count aggregate missing its field', () => {
     expect(() => person.groupBy({ aggregate: { total: { fn: 'sum' } } })).toThrow(/field/);
+  });
+});
+
+describe('groupBy aggregate type dispatch', () => {
+  const metric = new SurrealCollection('metric', 'sh', undefined, undefined, metricFields);
+
+  it('keeps math:: functions for numeric fields', () => {
+    expect(
+      surql(
+        metric.groupBy({
+          by: ['unit'],
+          aggregate: {
+            total: { fn: 'sum', field: 'score' },
+            avg: { fn: 'avg', field: 'ratio' },
+            hi: { fn: 'max', field: 'score' },
+            lo: { fn: 'min', field: 'score' },
+          },
+        }),
+      ).surql,
+    ).toBe(
+      'SELECT `unit`, math::sum(`score`) AS `total`, math::mean(`ratio`) AS `avg`, math::max(`score`) AS `hi`, math::min(`score`) AS `lo` FROM `metric` GROUP BY `unit`',
+    );
+  });
+
+  it('lowers max/min on a datetime field to time::max/time::min', () => {
+    expect(
+      surql(
+        metric.groupBy({
+          by: ['unit'],
+          aggregate: {
+            latest: { fn: 'max', field: 'startedAt' },
+            earliest: { fn: 'min', field: 'startedAt' },
+          },
+        }),
+      ).surql,
+    ).toBe(
+      'SELECT `unit`, time::max(`startedAt`) AS `latest`, time::min(`startedAt`) AS `earliest` FROM `metric` GROUP BY `unit`',
+    );
+  });
+
+  it('lowers max/min on a string field to the grouped array form', () => {
+    expect(
+      surql(
+        metric.groupBy({
+          by: ['unit'],
+          aggregate: {
+            top: { fn: 'max', field: 'label' },
+            bottom: { fn: 'min', field: 'label' },
+          },
+        }),
+      ).surql,
+    ).toBe(
+      'SELECT `unit`, array::max(array::group(`label`)) AS `top`, array::min(array::group(`label`)) AS `bottom` FROM `metric` GROUP BY `unit`',
+    );
+  });
+
+  it('dispatches the same way under GROUP ALL', () => {
+    expect(
+      surql(
+        metric.groupBy({
+          aggregate: {
+            latest: { fn: 'max', field: 'startedAt' },
+            top: { fn: 'max', field: 'label' },
+          },
+        }),
+      ).surql,
+    ).toBe(
+      'SELECT time::max(`startedAt`) AS `latest`, array::max(array::group(`label`)) AS `top` FROM `metric` GROUP ALL',
+    );
+  });
+
+  it('keeps math:: functions when the field is not declared on the table', () => {
+    expect(
+      surql(metric.groupBy({ aggregate: { hi: { fn: 'max', field: 'unknownField' } } })).surql,
+    ).toBe('SELECT math::max(`unknownField`) AS `hi` FROM `metric` GROUP ALL');
+  });
+
+  it('keeps math:: functions when the collection carries no field types at all', () => {
+    expect(surql(person.groupBy({ aggregate: { hi: { fn: 'max', field: 'age' } } })).surql).toBe(
+      'SELECT math::max(`age`) AS `hi` FROM `person` GROUP ALL',
+    );
+  });
+
+  it('rejects max on a bool field rather than returning a silent null', () => {
+    expect(() => metric.groupBy({ aggregate: { hi: { fn: 'max', field: 'active' } } })).toThrow(
+      'groupBy aggregate "hi" cannot use "max" on field "active" (type bool): no verified SurrealQL max lowering for this type',
+    );
+  });
+
+  it('rejects min on a bool field the same way', () => {
+    expect(() => metric.groupBy({ aggregate: { lo: { fn: 'min', field: 'active' } } })).toThrow(
+      'groupBy aggregate "lo" cannot use "min" on field "active" (type bool): no verified SurrealQL min lowering for this type',
+    );
+  });
+
+  it('rejects max on a bytes field', () => {
+    expect(() => metric.groupBy({ aggregate: { hi: { fn: 'max', field: 'payload' } } })).toThrow(
+      'groupBy aggregate "hi" cannot use "max" on field "payload" (type bytes): no verified SurrealQL max lowering for this type',
+    );
+  });
+
+  it('rejects max on a duration field', () => {
+    expect(() => metric.groupBy({ aggregate: { hi: { fn: 'max', field: 'ttl' } } })).toThrow(
+      'groupBy aggregate "hi" cannot use "max" on field "ttl" (type duration): no verified SurrealQL max lowering for this type',
+    );
+  });
+
+  it('rejects max on a uuid field', () => {
+    expect(() => metric.groupBy({ aggregate: { hi: { fn: 'max', field: 'externalId' } } })).toThrow(
+      'groupBy aggregate "hi" cannot use "max" on field "externalId" (type uuid): no verified SurrealQL max lowering for this type',
+    );
+  });
+
+  it('rejects max on a record field', () => {
+    expect(() => metric.groupBy({ aggregate: { hi: { fn: 'max', field: 'owner' } } })).toThrow(
+      'groupBy aggregate "hi" cannot use "max" on field "owner" (type record<`person`>): no verified SurrealQL max lowering for this type',
+    );
+  });
+
+  it('rejects max on a geometry field', () => {
+    expect(() => metric.groupBy({ aggregate: { hi: { fn: 'max', field: 'location' } } })).toThrow(
+      'groupBy aggregate "hi" cannot use "max" on field "location" (type geometry<point>): no verified SurrealQL max lowering for this type',
+    );
+  });
+
+  it('rejects sum on a datetime field', () => {
+    expect(() =>
+      metric.groupBy({ aggregate: { total: { fn: 'sum', field: 'startedAt' } } }),
+    ).toThrow(
+      'groupBy aggregate "total" cannot use "sum" on field "startedAt" (type datetime): sum requires a numeric field',
+    );
+  });
+
+  it('rejects avg on a string field', () => {
+    expect(() => metric.groupBy({ aggregate: { avg: { fn: 'avg', field: 'label' } } })).toThrow(
+      'groupBy aggregate "avg" cannot use "avg" on field "label" (type string): avg requires a numeric field',
+    );
   });
 });
 

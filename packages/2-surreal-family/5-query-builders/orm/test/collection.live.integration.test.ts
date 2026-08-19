@@ -1,5 +1,5 @@
 import { SurrealDriverImpl } from '@internal/driver-surrealdb/runtime';
-import { SurrealIndex } from '@internal/surreal-contract';
+import { SurrealField, SurrealIndex } from '@internal/surreal-contract';
 import { SurrealQueryError } from '@internal/surreal-errors';
 import { lowerQuery } from '@internal/surreal-lowering';
 import type { SurrealQueryPlan } from '@internal/surreal-query-ast/plan';
@@ -217,6 +217,103 @@ describe.skipIf(!available)('upsert and groupBy against a live SurrealDB', () =>
     it('aggregates the whole table with GROUP ALL', async () => {
       const rows = await run(team.groupBy({ aggregate: { n: { fn: 'count' } } }));
       expect(rows).toEqual([{ n: 3 }]);
+    });
+  });
+
+  describe('type-aware max/min lowering', () => {
+    const metricFields: ReadonlyArray<SurrealField> = [
+      new SurrealField({
+        name: 'unit',
+        type: { kind: 'scalar', name: 'string' },
+        codecId: 'string',
+      }),
+      new SurrealField({ name: 'score', type: { kind: 'scalar', name: 'int' }, codecId: 'int' }),
+      new SurrealField({
+        name: 'startedAt',
+        type: { kind: 'scalar', name: 'datetime' },
+        codecId: 'datetime',
+      }),
+      new SurrealField({
+        name: 'label',
+        type: { kind: 'scalar', name: 'string' },
+        codecId: 'string',
+      }),
+    ];
+    const metric = new SurrealCollection('metric_typed', 'sh', undefined, undefined, metricFields);
+
+    beforeAll(async () => {
+      await exec('REMOVE TABLE IF EXISTS `metric_typed`');
+      await run(
+        metric.create({
+          data: {
+            unit: 'x',
+            score: 10,
+            startedAt: new Date('2026-01-01T00:00:00Z'),
+            label: 'apple',
+          },
+        }),
+      );
+      await run(
+        metric.create({
+          data: {
+            unit: 'x',
+            score: 20,
+            startedAt: new Date('2026-02-01T00:00:00Z'),
+            label: 'banana',
+          },
+        }),
+      );
+      await run(
+        metric.create({
+          data: {
+            unit: 'y',
+            score: 5,
+            startedAt: new Date('2025-06-01T00:00:00Z'),
+            label: 'cherry',
+          },
+        }),
+      );
+    });
+
+    it('lowers max/min by declared field type and returns correct values per group', async () => {
+      const rows = await run(
+        metric.groupBy({
+          by: ['unit'],
+          aggregate: {
+            hi: { fn: 'max', field: 'score' },
+            lo: { fn: 'min', field: 'score' },
+            latest: { fn: 'max', field: 'startedAt' },
+            earliest: { fn: 'min', field: 'startedAt' },
+            top: { fn: 'max', field: 'label' },
+            bottom: { fn: 'min', field: 'label' },
+          },
+        }),
+      );
+      const byUnit = new Map(rows.map((row) => [row['unit'] as string, row]));
+
+      const x = byUnit.get('x');
+      expect(x).toMatchObject({ hi: 20, lo: 10, top: 'banana', bottom: 'apple' });
+      expect(String(x?.['latest'])).toBe('2026-02-01T00:00:00Z');
+      expect(String(x?.['earliest'])).toBe('2026-01-01T00:00:00Z');
+
+      const y = byUnit.get('y');
+      expect(y).toMatchObject({ hi: 5, lo: 5, top: 'cherry', bottom: 'cherry' });
+      expect(String(y?.['latest'])).toBe('2025-06-01T00:00:00Z');
+      expect(String(y?.['earliest'])).toBe('2025-06-01T00:00:00Z');
+    });
+
+    it('dispatches the same way under GROUP ALL', async () => {
+      const rows = await run(
+        metric.groupBy({
+          aggregate: {
+            latest: { fn: 'max', field: 'startedAt' },
+            top: { fn: 'max', field: 'label' },
+          },
+        }),
+      );
+      expect(rows).toHaveLength(1);
+      expect(String(rows[0]?.['latest'])).toBe('2026-02-01T00:00:00Z');
+      expect(rows[0]?.['top']).toBe('cherry');
     });
   });
 });

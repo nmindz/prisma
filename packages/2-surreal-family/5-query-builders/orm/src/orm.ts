@@ -51,6 +51,7 @@ export function orm<TContract extends Contract<SurrealStorageShape>>(
       storageHash,
       undefined,
       tables[table]?.indexes,
+      tables[table]?.fields,
     );
   }
 
