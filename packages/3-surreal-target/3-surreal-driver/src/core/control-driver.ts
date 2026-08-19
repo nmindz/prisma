@@ -1,5 +1,6 @@
 import { errorRuntime } from '@internal/errors/execution';
 import type { ControlDriverDescriptor } from '@internal/framework-components/control';
+import { SurrealQueryError } from '@internal/surreal-errors';
 import type {
   SurrealControlDriverInstance,
   SurrealExecuteRequest,
@@ -7,7 +8,12 @@ import type {
 } from '@internal/surreal-lowering';
 import { blindCast } from '@internal/utils/casts';
 import type { SurrealBinding } from '../binding';
-import { envelopeRows, selectEnvelope } from '../result-envelope';
+import {
+  derivePlanIndex,
+  envelopeRows,
+  SurrealBatchQueryError,
+  selectEnvelope,
+} from '../result-envelope';
 import { SurrealRpcClient } from '../rpc-client';
 import { surrealDriverDescriptorMeta } from './descriptor-meta';
 
@@ -50,7 +56,17 @@ export class SurrealControlDriver implements SurrealControlDriverInstance {
     resultIndices: readonly number[],
   ): Promise<readonly (readonly unknown[])[]> {
     const response = await this.#rpc.call('query', [request.surql, request.vars ?? {}]);
-    return resultIndices.map((index) => envelopeRows(selectEnvelope(response, index)));
+    try {
+      return resultIndices.map((index) => envelopeRows(selectEnvelope(response, index)));
+    } catch (error) {
+      if (SurrealQueryError.is(error) && error.statementIndex !== undefined) {
+        throw new SurrealBatchQueryError(
+          error,
+          derivePlanIndex(error.statementIndex, resultIndices),
+        );
+      }
+      throw error;
+    }
   }
 
   async databaseName(): Promise<string | undefined> {
@@ -66,10 +82,13 @@ export class SurrealControlDriver implements SurrealControlDriverInstance {
  * Parses the connection string the CLI carries.
  *
  * SurrealDB needs a namespace and a database alongside the socket URL, and a
- * bare `ws://host/rpc` names neither. The path segments supply them —
- * `ws://host:8000/rpc/<namespace>/<database>` — with credentials in the URL's
- * userinfo, so one string configures the whole connection.
+ * bare `wss://host/rpc` names neither. The path segments supply them —
+ * `wss://host:8000/rpc/<namespace>/<database>` — with credentials in the
+ * URL's userinfo, so one string configures the whole connection. The
+ * plaintext `ws:` scheme stays accepted for local development.
  */
+const ALLOWED_CONNECTION_SCHEMES = new Set<string>(['ws:', 'wss:']);
+
 export function parseSurrealConnectionString(connection: string): SurrealBinding {
   let url: URL;
   try {
@@ -77,30 +96,61 @@ export function parseSurrealConnectionString(connection: string): SurrealBinding
   } catch (error) {
     throw errorRuntime('DRIVER.CONNECTION_FAILED', 'Invalid SurrealDB connection string', {
       why: error instanceof Error ? error.message : String(error),
-      fix: 'Use ws://user:pass@host:port/rpc/<namespace>/<database>',
+      fix: 'Use wss://user:pass@host:port/rpc/<namespace>/<database> (plaintext ws: only for local development)',
       cause: error,
     });
   }
+  if (!ALLOWED_CONNECTION_SCHEMES.has(url.protocol)) {
+    throw errorRuntime(
+      'DRIVER.CONNECTION_FAILED',
+      `SurrealDB connection string uses unsupported scheme "${url.protocol}"`,
+      {
+        why: `"${url.protocol}" is not ws: or wss:`,
+        fix: 'Use wss://user:pass@host:port/rpc/<namespace>/<database> (plaintext ws: only for local development)',
+      },
+    );
+  }
   const segments = url.pathname.split('/').filter((segment) => segment.length > 0);
   const rpcIndex = segments.indexOf('rpc');
-  const [namespace, database] =
+  const [rawNamespace, rawDatabase] =
     rpcIndex === -1 ? segments.slice(0, 2) : segments.slice(rpcIndex + 1, rpcIndex + 3);
-  if (namespace === undefined || database === undefined) {
+  if (rawNamespace === undefined || rawDatabase === undefined) {
     throw errorRuntime(
       'DRIVER.CONNECTION_FAILED',
       'SurrealDB connection string names no namespace and database',
       {
         why: `"${url.pathname}" carries no <namespace>/<database> path segments`,
-        fix: 'Use ws://user:pass@host:port/rpc/<namespace>/<database>',
+        fix: 'Use wss://user:pass@host:port/rpc/<namespace>/<database> (plaintext ws: only for local development)',
       },
     );
   }
-  const username = decodeURIComponent(url.username);
-  const password = decodeURIComponent(url.password);
+  // All four decode calls share one try/catch: whichever component is
+  // malformed, the caller gets the same "not valid percent-encoding" error
+  // rather than the raw text — the connection string can carry a password.
+  let namespace: string;
+  let database: string;
+  let username: string;
+  let password: string;
+  try {
+    namespace = decodeURIComponent(rawNamespace);
+    database = decodeURIComponent(rawDatabase);
+    username = decodeURIComponent(url.username);
+    password = decodeURIComponent(url.password);
+  } catch (error) {
+    throw errorRuntime(
+      'DRIVER.CONNECTION_FAILED',
+      'SurrealDB connection string is not valid percent-encoding',
+      {
+        why: error instanceof Error ? error.message : String(error),
+        fix: 'Percent-encode any special character in the namespace, database, username, or password',
+        cause: error,
+      },
+    );
+  }
   return {
     url: `${url.protocol}//${url.host}/rpc`,
-    namespace: decodeURIComponent(namespace),
-    database: decodeURIComponent(database),
+    namespace,
+    database,
     ...(username === '' ? {} : { username }),
     ...(password === '' ? {} : { password }),
   };

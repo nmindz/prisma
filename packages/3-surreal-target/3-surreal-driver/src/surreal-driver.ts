@@ -1,5 +1,5 @@
 import type { RuntimeDriverInstance } from '@internal/framework-components/execution';
-import { SurrealConnectionError } from '@internal/surreal-errors';
+import { SurrealConnectionError, SurrealQueryError } from '@internal/surreal-errors';
 import type {
   SurrealConnection,
   SurrealDriver,
@@ -14,7 +14,12 @@ import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import type { SurrealBinding, SurrealTransactionId } from './binding';
 import { SurrealLiveSubscriptionImpl } from './live-subscription';
-import { envelopeRows, selectEnvelope } from './result-envelope';
+import {
+  derivePlanIndex,
+  envelopeRows,
+  SurrealBatchQueryError,
+  selectEnvelope,
+} from './result-envelope';
 import { SurrealRpcClient } from './rpc-client';
 
 export type SurrealRuntimeDriver = RuntimeDriverInstance<'surreal', 'surrealdb'> &
@@ -68,7 +73,17 @@ abstract class SurrealQueryableBase {
     resultIndices: readonly number[],
   ): Promise<readonly (readonly unknown[])[]> {
     const response = await this.rpc.call('query', [request.surql, request.vars ?? {}], this.txn);
-    return resultIndices.map((index) => envelopeRows(selectEnvelope(response, index)));
+    try {
+      return resultIndices.map((index) => envelopeRows(selectEnvelope(response, index)));
+    } catch (error) {
+      if (error instanceof SurrealQueryError && error.statementIndex !== undefined) {
+        throw new SurrealBatchQueryError(
+          error,
+          derivePlanIndex(error.statementIndex, resultIndices),
+        );
+      }
+      throw error;
+    }
   }
 
   /**

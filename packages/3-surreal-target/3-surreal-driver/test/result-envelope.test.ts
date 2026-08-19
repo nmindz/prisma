@@ -1,6 +1,11 @@
 import { SurrealQueryError } from '@internal/surreal-errors';
 import { describe, expect, it } from 'vitest';
-import { envelopeRows, selectEnvelope } from '../src/result-envelope';
+import {
+  derivePlanIndex,
+  envelopeRows,
+  SurrealBatchQueryError,
+  selectEnvelope,
+} from '../src/result-envelope';
 
 const ok = (result: unknown) => ({ status: 'OK' as const, result, time: '1ms' });
 
@@ -56,6 +61,56 @@ describe('selectEnvelope', () => {
   it('rejects an out-of-range statement index', () => {
     expect(() => selectEnvelope([ok([])], 3)).toThrow(/statement 3 has none/);
   });
+
+  it('attributes a batch failure to the genuine envelope, not a collateral one before it', () => {
+    // A `BEGIN`/`COMMIT` batch where the middle statement fails: SurrealDB
+    // marks every other member ERR too, tagged `details.kind` as collateral
+    // (`NotExecuted`/`Cancelled`); only the real failure has no `details`.
+    let thrown: unknown;
+    try {
+      selectEnvelope(
+        [
+          ok(null),
+          {
+            status: 'ERR',
+            result: 'The query was not executed due to a failed transaction',
+            kind: 'Query',
+            details: { kind: 'NotExecuted' },
+          },
+          {
+            status: 'ERR',
+            result:
+              "Database index `person_name_uq` already contains 'ada', with record `person:1`",
+            kind: 'Internal',
+          },
+          {
+            status: 'ERR',
+            result: 'The query was not executed due to a cancelled transaction',
+            kind: 'Query',
+            details: { kind: 'Cancelled' },
+          },
+        ],
+        2,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toMatchObject({ statementIndex: 2, failure: 'unique-violation' });
+  });
+
+  it('falls back to the first collateral envelope when no genuine one is present', () => {
+    expect(() =>
+      selectEnvelope([
+        ok(null),
+        {
+          status: 'ERR',
+          result: 'The query was not executed due to a failed transaction',
+          kind: 'Query',
+          details: { kind: 'NotExecuted' },
+        },
+      ]),
+    ).toThrow(/not executed due to a failed transaction/);
+  });
 });
 
 describe('envelopeRows', () => {
@@ -69,5 +124,57 @@ describe('envelopeRows', () => {
 
   it('reads the null from RETURN NONE as no rows', () => {
     expect(envelopeRows(ok(null))).toEqual([]);
+  });
+});
+
+describe('derivePlanIndex', () => {
+  const resultIndices = [1, 2, 3];
+
+  it('attributes the BEGIN envelope to no plan', () => {
+    expect(derivePlanIndex(0, resultIndices)).toBeUndefined();
+  });
+
+  it('attributes each plan envelope to its own plan', () => {
+    expect(derivePlanIndex(1, resultIndices)).toBe(0);
+    expect(derivePlanIndex(2, resultIndices)).toBe(1);
+    expect(derivePlanIndex(3, resultIndices)).toBe(2);
+  });
+
+  it('attributes the COMMIT envelope to no plan', () => {
+    expect(derivePlanIndex(4, resultIndices)).toBeUndefined();
+  });
+
+  it('attributes an index past every envelope to no plan', () => {
+    expect(derivePlanIndex(5, resultIndices)).toBeUndefined();
+  });
+});
+
+describe('SurrealBatchQueryError', () => {
+  it('carries the plan index alongside the original failure fields', () => {
+    const source = new SurrealQueryError('Parse error: Unexpected token', {
+      failure: 'parse',
+      statementIndex: 2,
+      surrealKind: 'Validation',
+    });
+
+    const batchError = new SurrealBatchQueryError(source, 1);
+
+    expect(batchError).toMatchObject({
+      name: 'SurrealBatchQueryError',
+      message: 'Parse error: Unexpected token',
+      planIndex: 1,
+      failure: 'parse',
+      statementIndex: 2,
+      surrealKind: 'Validation',
+      cause: source,
+    });
+  });
+
+  it('carries an undefined plan index for a transaction-level failure', () => {
+    const source = new SurrealQueryError('Parse error', { failure: 'parse', statementIndex: 0 });
+
+    const batchError = new SurrealBatchQueryError(source, undefined);
+
+    expect(batchError.planIndex).toBeUndefined();
   });
 });

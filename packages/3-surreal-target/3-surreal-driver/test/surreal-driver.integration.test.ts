@@ -326,6 +326,29 @@ describe.skipIf(!available)('SurrealDB driver, against a live server', () => {
     });
   });
 
+  describe('batch', () => {
+    it('attributes a middle-plan failure to its plan index, not the envelope index', async () => {
+      await raw("CREATE person:batch_dup CONTENT { name: 'batch-dup', age: 50 } RETURN NONE");
+
+      const statements = [
+        'BEGIN',
+        "CREATE person:batch_a CONTENT { name: 'batch_a', age: 40 } RETURN NONE",
+        "CREATE person:batch_b CONTENT { name: 'batch-dup', age: 51 } RETURN NONE",
+        "CREATE person:batch_c CONTENT { name: 'batch_c', age: 41 } RETURN NONE",
+        'COMMIT',
+      ];
+
+      let thrown: unknown;
+      try {
+        await driver.batch({ surql: statements.join('; ') }, [1, 2, 3]);
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toMatchObject({ planIndex: 1 });
+    });
+  });
+
   it('reports rows for a wildcard read', async () => {
     const rows = await run({
       statements: [

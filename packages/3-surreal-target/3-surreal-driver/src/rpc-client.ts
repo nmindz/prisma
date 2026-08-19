@@ -23,6 +23,7 @@ export interface NotificationFrame {
   readonly action?: unknown;
   readonly record?: unknown;
   readonly result?: unknown;
+  readonly session?: unknown;
 }
 
 function isNotificationFrame(value: unknown): value is NotificationFrame {
@@ -58,9 +59,11 @@ export class SurrealRpcClient {
   readonly #protocol: SurrealWireProtocol;
   readonly #pending = new Map<number, Pending>();
   readonly #liveHandlers = new Map<string, (frame: NotificationFrame) => void>();
+  readonly #closeHandlers = new Set<() => void>();
   #nextId = 0;
   #closed = false;
   #closeReason: string | undefined;
+  #closeHandlersFired = false;
 
   private constructor(socket: WebSocket, protocol: SurrealWireProtocol) {
     this.#socket = socket;
@@ -115,6 +118,21 @@ export class SurrealRpcClient {
   }
 
   /**
+   * Registers interest in this connection closing or erroring, so a live
+   * subscription can reach a terminal state instead of hanging forever.
+   *
+   * Called once per connection, never per notification: unlike `onLive`,
+   * where a stale id is simply dropped, a missed close would leave a pending
+   * `next()` unresolved for good.
+   */
+  onClose(handler: () => void): () => void {
+    this.#closeHandlers.add(handler);
+    return () => {
+      this.#closeHandlers.delete(handler);
+    };
+  }
+
+  /**
    * CBOR frames arrive as binary and JSON frames as text, so the frame's own
    * type decides how to read it rather than the negotiated protocol. A server
    * that answered in the other encoding is still understood.
@@ -138,6 +156,13 @@ export class SurrealRpcClient {
       pending.reject(new SurrealConnectionError(reason, { transient: true }));
     }
     this.#pending.clear();
+    // `close` and `error` can each reach here for the same drop (a network
+    // failure fires both), so this only runs once: a live subscription's
+    // termination is a one-time event, not one per socket event that named it.
+    if (this.#closeHandlersFired) return;
+    this.#closeHandlersFired = true;
+    for (const handler of this.#closeHandlers) handler();
+    this.#closeHandlers.clear();
   }
 
   /**
@@ -216,9 +241,12 @@ export class SurrealRpcClient {
 
   async close(): Promise<void> {
     if (this.#closed) return;
-    this.#closed = true;
+    // Settle everything before the socket's own close event races us: an
+    // in-flight call must reject, not hang, and live subscriptions must
+    // terminate exactly as they would on a dropped connection.
+    this.#closeReason ??= 'SurrealDB connection closed';
     this.#socket.close();
-    this.#pending.clear();
+    this.#failAllPending();
   }
 
   get closed(): boolean {
@@ -247,9 +275,26 @@ function rpcError(error: {
   });
 }
 
+const ALLOWED_SOCKET_SCHEMES = new Set<string>(['ws:', 'wss:']);
+
 function openSocket(binding: SurrealBinding, protocol: SurrealWireProtocol): Promise<WebSocket> {
   const timeoutMs = binding.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
   return new Promise<WebSocket>((resolve, reject) => {
+    let scheme: string;
+    try {
+      scheme = new URL(binding.url).protocol;
+    } catch (error) {
+      reject(new SurrealConnectionError(`Invalid SurrealDB URL: ${binding.url}`, { cause: error }));
+      return;
+    }
+    if (!ALLOWED_SOCKET_SCHEMES.has(scheme)) {
+      reject(
+        new SurrealConnectionError(
+          `SurrealDB URL uses unsupported scheme "${scheme}"; only ws: and wss: are allowed`,
+        ),
+      );
+      return;
+    }
     let socket: WebSocket;
     try {
       socket = new WebSocket(binding.url, protocol);

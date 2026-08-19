@@ -31,6 +31,8 @@ export interface SurrealLiveNotification<Row = Record<string, unknown>> {
    * describing the change.
    */
   readonly value: Row;
+  /** The session the change was made under, when SurrealDB reports one. */
+  readonly session?: unknown;
 }
 
 /**
@@ -50,9 +52,36 @@ export interface SurrealLiveSubscription<Row = Record<string, unknown>>
   extends AsyncIterable<SurrealLiveNotification<Row>> {
   /** The id `LIVE SELECT` returned, as `KILL` expects it back. */
   readonly liveId: unknown;
+  /** Whether this side ended the subscription by calling {@link kill}. */
   readonly killed: boolean;
-  /** Registers a listener. The returned function removes just that one. */
+  /**
+   * Whether the subscription has reached a terminal state, by any means:
+   * `kill()`, or the underlying connection closing or erroring.
+   *
+   * `killed` names only the first of those; `closed` covers all of them, so
+   * a caller that only wants to know "is this still live" does not have to
+   * enumerate every way it could stop being so. A subscription whose
+   * connection dropped is `closed` but not `killed` — this side never asked
+   * to end it.
+   */
+  readonly closed: boolean;
+  /**
+   * Registers a listener. The returned function removes just that one.
+   *
+   * A no-op once {@link closed}: the handler would never be called, so
+   * registering it would only leak a reference for no benefit.
+   */
   subscribe(handler: (notification: SurrealLiveNotification<Row>) => void): () => void;
+  /**
+   * Ends the subscription, telling the server to stop sending notifications.
+   *
+   * Resolves without an RPC round trip if the subscription is already
+   * {@link closed} — the connection that `KILL` would travel over is gone,
+   * and the server already dropped every live query when it went. Any
+   * notification already buffered before that point stays drainable by the
+   * async iterator: `kill()` stops new notifications from arriving, not the
+   * ones that arrived first.
+   */
   kill(): Promise<void>;
 }
 

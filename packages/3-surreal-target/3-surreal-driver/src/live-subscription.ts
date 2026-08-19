@@ -14,6 +14,19 @@ function readAction(value: unknown): SurrealLiveAction {
 }
 
 /**
+ * A `subscribe()` handler is caller code the driver does not control. Routing
+ * its throw to a process warning, rather than letting it escape from
+ * `#deliver`, is what keeps one broken listener from silencing every other
+ * listener and the async-iterator side along with it.
+ */
+function reportLiveHandlerError(error: unknown): void {
+  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  process.emitWarning(`SurrealDB live-query handler threw: ${message}`, {
+    code: 'PN_SURREAL_LIVE_HANDLER_ERROR',
+  });
+}
+
+/**
  * One live query, with both consumption styles over a single notification
  * stream.
  *
@@ -33,19 +46,28 @@ export class SurrealLiveSubscriptionImpl<Row> implements SurrealLiveSubscription
   readonly #handlers = new Set<(notification: SurrealLiveNotification<Row>) => void>();
   readonly #buffer: SurrealLiveNotification<Row>[] = [];
   readonly #waiting: ((result: IteratorResult<SurrealLiveNotification<Row>>) => void)[] = [];
-  #unsubscribe: (() => void) | undefined;
+  #unsubscribeLive: (() => void) | undefined;
+  #unsubscribeClose: (() => void) | undefined;
   #killed = false;
+  #closed = false;
 
   constructor(rpc: SurrealRpcClient, liveId: unknown) {
     this.#rpc = rpc;
     this.liveId = liveId;
-    this.#unsubscribe = rpc.onLive(liveId, (frame) => {
+    this.#unsubscribeLive = rpc.onLive(liveId, (frame) => {
       this.#deliver(frame);
+    });
+    this.#unsubscribeClose = rpc.onClose(() => {
+      this.#settle();
     });
   }
 
   get killed(): boolean {
     return this.#killed;
+  }
+
+  get closed(): boolean {
+    return this.#closed;
   }
 
   #deliver(frame: NotificationFrame): void {
@@ -56,8 +78,15 @@ export class SurrealLiveSubscriptionImpl<Row> implements SurrealLiveSubscription
         Row,
         'the notification payload is the record the live query selected; the caller names its row type when opening the subscription'
       >(frame.result),
+      ...(frame.session === undefined ? {} : { session: frame.session }),
     };
-    for (const handler of this.#handlers) handler(notification);
+    for (const handler of this.#handlers) {
+      try {
+        handler(notification);
+      } catch (error) {
+        reportLiveHandlerError(error);
+      }
+    }
 
     const waiter = this.#waiting.shift();
     if (waiter !== undefined) {
@@ -69,6 +98,7 @@ export class SurrealLiveSubscriptionImpl<Row> implements SurrealLiveSubscription
   }
 
   subscribe(handler: (notification: SurrealLiveNotification<Row>) => void): () => void {
+    if (this.#closed) return () => {};
     this.#handlers.add(handler);
     return () => {
       this.#handlers.delete(handler);
@@ -77,12 +107,27 @@ export class SurrealLiveSubscriptionImpl<Row> implements SurrealLiveSubscription
 
   async kill(): Promise<void> {
     if (this.#killed) return;
+    const alreadyClosed = this.#closed;
     this.#killed = true;
-    this.#unsubscribe?.();
-    this.#unsubscribe = undefined;
+    this.#settle();
+    if (!alreadyClosed) await this.#rpc.call('kill', [this.liveId]);
+  }
+
+  /**
+   * Reaches the terminal state, from either `kill()` or the connection
+   * closing. Safe to call more than once — from both, or from the same
+   * source twice — since every effect below is already a no-op the second
+   * time: an empty set stays empty, `undefined` unsubscribe functions are
+   * skipped, and an empty waiter list has nothing left to settle.
+   */
+  #settle(): void {
+    this.#closed = true;
+    this.#unsubscribeLive?.();
+    this.#unsubscribeLive = undefined;
+    this.#unsubscribeClose?.();
+    this.#unsubscribeClose = undefined;
     this.#handlers.clear();
     for (const waiter of this.#waiting.splice(0)) waiter({ value: undefined, done: true });
-    await this.#rpc.call('kill', [this.liveId]);
   }
 
   [Symbol.asyncIterator](): AsyncIterator<SurrealLiveNotification<Row>> {
@@ -90,7 +135,7 @@ export class SurrealLiveSubscriptionImpl<Row> implements SurrealLiveSubscription
       next: (): Promise<IteratorResult<SurrealLiveNotification<Row>>> => {
         const buffered = this.#buffer.shift();
         if (buffered !== undefined) return Promise.resolve({ value: buffered, done: false });
-        if (this.#killed) return Promise.resolve({ value: undefined, done: true });
+        if (this.#closed) return Promise.resolve({ value: undefined, done: true });
         return new Promise((resolve) => {
           this.#waiting.push(resolve);
         });
