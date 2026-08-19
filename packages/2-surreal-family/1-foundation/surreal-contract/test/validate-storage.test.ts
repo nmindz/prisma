@@ -128,6 +128,62 @@ describe('validateSurrealTables', () => {
     });
     expect(() => validateSurrealTables({ table })).toThrow(/holds no record link/);
   });
+
+  it('rejects REFERENCE ON DELETE UNSET on a required record link', () => {
+    const table = new SurrealTable({
+      fields: [
+        {
+          name: 'author',
+          type: { kind: 'record', tables: ['person'] },
+          codecId: 'r',
+          reference: { kind: 'unset' },
+        },
+      ],
+    });
+    expect(() => validateSurrealTables({ person, table })).toThrow(/required link/);
+  });
+
+  it('accepts REFERENCE ON DELETE UNSET on an optional record link', () => {
+    const table = new SurrealTable({
+      fields: [
+        {
+          name: 'author',
+          type: { kind: 'option', of: { kind: 'record', tables: ['person'] } },
+          codecId: 'r',
+          reference: { kind: 'unset' },
+        },
+      ],
+    });
+    expect(() => validateSurrealTables({ person, table })).not.toThrow();
+  });
+
+  it('accepts REFERENCE ON DELETE UNSET on a required array of record links', () => {
+    const table = new SurrealTable({
+      fields: [
+        {
+          name: 'authors',
+          type: { kind: 'array', of: { kind: 'record', tables: ['person'] } },
+          codecId: 'r',
+          reference: { kind: 'unset' },
+        },
+      ],
+    });
+    expect(() => validateSurrealTables({ person, table })).not.toThrow();
+  });
+
+  it('accepts REFERENCE ON DELETE CASCADE on a required record link', () => {
+    const table = new SurrealTable({
+      fields: [
+        {
+          name: 'author',
+          type: { kind: 'record', tables: ['person'] },
+          codecId: 'r',
+          reference: { kind: 'cascade' },
+        },
+      ],
+    });
+    expect(() => validateSurrealTables({ person, table })).not.toThrow();
+  });
 });
 
 describe('composeSurrealEntityKinds', () => {

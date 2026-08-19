@@ -109,6 +109,64 @@ describe('defineContract', () => {
     ).toThrow(/references table "ghost"/);
   });
 
+  it('renders REFERENCE ON DELETE for a record-link field declaring onDelete', () => {
+    const contract = defineContract({
+      tables: {
+        person: {},
+        post: {
+          fields: { author: { type: t.record('person'), onDelete: 'cascade' } },
+        },
+      },
+    });
+    const field =
+      contract.storage.namespaces['__unbound__']?.entries.table?.['post']?.fieldNamed('author');
+    expect(field?.reference).toEqual({ kind: 'cascade' });
+  });
+
+  it('gives a different hash when only the onDelete action changes', () => {
+    const declare = (onDelete: 'cascade' | 'reject') =>
+      defineContract({
+        tables: {
+          person: {},
+          post: { fields: { author: { type: t.record('person'), onDelete } } },
+        },
+      });
+    expect(declare('cascade').storage.storageHash).not.toBe(declare('reject').storage.storageHash);
+  });
+
+  it('rejects onDelete on a field whose type holds no record link', () => {
+    expect(() =>
+      defineContract({
+        tables: { post: { fields: { title: { type: t.string(), onDelete: 'cascade' } } } },
+      }),
+    ).toThrow(/holds no record link/);
+  });
+
+  it('rejects onDelete: unset on a required (non-option) record link', () => {
+    expect(() =>
+      defineContract({
+        tables: {
+          person: {},
+          post: { fields: { author: { type: t.record('person'), onDelete: 'unset' } } },
+        },
+      }),
+    ).toThrow(/required link/);
+  });
+
+  it('accepts onDelete: unset on an option record link', () => {
+    const contract = defineContract({
+      tables: {
+        person: {},
+        post: {
+          fields: { author: { type: t.option(t.record('person')), onDelete: 'unset' } },
+        },
+      },
+    });
+    const field =
+      contract.storage.namespaces['__unbound__']?.entries.table?.['post']?.fieldNamed('author');
+    expect(field?.reference).toEqual({ kind: 'unset' });
+  });
+
   it('rejects a vector index over more than one field', () => {
     expect(() =>
       defineContract({

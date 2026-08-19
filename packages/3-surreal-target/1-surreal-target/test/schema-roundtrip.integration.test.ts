@@ -1,5 +1,11 @@
 import { SurrealDriverImpl } from '@internal/driver-surrealdb/runtime';
-import { buildSurrealNamespace, SurrealAnalyzer, SurrealTable } from '@internal/surreal-contract';
+import type { SurrealFieldInput } from '@internal/surreal-contract';
+import {
+  buildSurrealNamespace,
+  SurrealAnalyzer,
+  SurrealField,
+  SurrealTable,
+} from '@internal/surreal-contract';
 import {
   buildSurrealSchemaIR,
   diffSurrealSchemas,
@@ -44,6 +50,14 @@ const analyzers = {
   english: new SurrealAnalyzer({ tokenizers: ['blank', 'class'], filters: ['lowercase'] }),
 };
 
+/** Shared with the hand-changed-ON-DELETE drift test below, so restoring it needs no lookup. */
+const postAuthorField: SurrealFieldInput = {
+  name: 'author',
+  type: { kind: 'record', tables: ['person'] },
+  codecId: 'c',
+  reference: { kind: 'cascade' },
+};
+
 const tables = {
   person: new SurrealTable({
     fields: [
@@ -77,6 +91,12 @@ const tables = {
         fields: ['embedding'],
         variant: { kind: 'hnsw', dimension: 3, distance: 'cosine' },
       },
+    ],
+  }),
+  post: new SurrealTable({
+    fields: [
+      { name: 'title', type: { kind: 'scalar', name: 'string' }, codecId: 'c' },
+      postAuthorField,
     ],
   }),
 };
@@ -174,6 +194,18 @@ describe.skipIf(!available)('contract DDL round-trips through SurrealDB introspe
     expect(operations).toContainEqual(
       expect.objectContaining({ kind: 'define-table', table: 'follows' }),
     );
+  });
+
+  it('notices a hand-changed ON DELETE action on a record link', async () => {
+    await run(
+      'DEFINE FIELD OVERWRITE `author` ON TABLE `post` TYPE record<`person`> REFERENCE ON DELETE REJECT',
+    );
+    const operations = diffSurrealSchemas(expectedSchema(), await introspect());
+    expect(operations).toContainEqual(
+      expect.objectContaining({ kind: 'redefine-field', table: 'post', field: 'author' }),
+    );
+    // Restore, so the ordering of the tests above does not matter.
+    await run(renderDefineField('post', new SurrealField(postAuthorField), 'overwrite'));
   });
 });
 

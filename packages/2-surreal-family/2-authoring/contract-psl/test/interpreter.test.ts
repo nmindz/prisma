@@ -42,6 +42,7 @@ type StorageTableShape = {
     readonly type: unknown;
     readonly codecId: string;
     readonly defaultExpression?: string;
+    readonly reference?: unknown;
   }[];
   readonly indexes: readonly {
     readonly name: string;
@@ -262,6 +263,84 @@ describe('interpretPslDocumentToSurrealContract', () => {
       expect(
         ir.domain.namespaces[UNBOUND_DOMAIN_NAMESPACE_ID]?.models['Author']?.relations,
       ).toEqual({});
+    });
+
+    it.each([
+      ['Cascade', 'cascade'],
+      ['Restrict', 'reject'],
+      ['NoAction', 'ignore'],
+    ] as const)('maps @relation(onDelete: %s) to REFERENCE ON DELETE %s', (pslAction, kind) => {
+      const ir = interpretOk(`
+        model Author {
+          id String @id
+        }
+
+        model Post {
+          id     String @id
+          author Author @relation(onDelete: ${pslAction})
+        }
+      `);
+      expect(tableOf(ir, 'post').fields).toContainEqual({
+        name: 'author',
+        type: { kind: 'record', tables: ['author'] },
+        codecId: 'surrealdb/record@1',
+        reference: { kind },
+      });
+    });
+
+    it('maps @relation(onDelete: SetNull) on an optional relation to REFERENCE ON DELETE UNSET', () => {
+      const ir = interpretOk(`
+        model Author {
+          id String @id
+        }
+
+        model Post {
+          id     String @id
+          author Author? @relation(onDelete: SetNull)
+        }
+      `);
+      expect(tableOf(ir, 'post').fields).toContainEqual({
+        name: 'author',
+        type: { kind: 'option', of: { kind: 'record', tables: ['author'] } },
+        codecId: 'surrealdb/record@1',
+        reference: { kind: 'unset' },
+      });
+    });
+
+    it('reports PSL_UNSET_REQUIRES_OPTIONAL_RELATION for onDelete: SetNull on a required relation', () => {
+      const diagnostics = interpretDiagnostics(`
+        model Author {
+          id String @id
+        }
+
+        model Post {
+          id     String @id
+          author Author @relation(onDelete: SetNull)
+        }
+      `);
+      expect(diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'PSL_UNSET_REQUIRES_OPTIONAL_RELATION' }),
+        ]),
+      );
+    });
+
+    it('reports PSL_UNSUPPORTED_ONDELETE_ACTION for an unrecognized action', () => {
+      const diagnostics = interpretDiagnostics(`
+        model Author {
+          id String @id
+        }
+
+        model Post {
+          id     String @id
+          author Author @relation(onDelete: WeirdAction)
+        }
+      `);
+      expect(diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'PSL_UNSUPPORTED_ONDELETE_ACTION' }),
+        ]),
+      );
     });
   });
 
@@ -512,6 +591,35 @@ model User {
             },
             indexes: {
               post_title_unique: { fields: ['title'], variant: indexOf.unique() },
+            },
+          },
+        },
+      });
+
+      expect(psl.storage.storageHash).toBe(ts.storage.storageHash);
+    });
+
+    it('produces the same storage hash for @relation(onDelete: Cascade) as onDelete: "cascade" in TS', () => {
+      const psl = interpretOk(`
+        model User {
+          id    String @id
+          name  String
+        }
+
+        model Post {
+          id     String @id
+          title  String
+          author User   @relation(onDelete: Cascade)
+        }
+      `);
+
+      const ts = defineContract({
+        tables: {
+          user: { fields: { name: { type: t.string() } } },
+          post: {
+            fields: {
+              title: { type: t.string() },
+              author: { type: t.record('user'), onDelete: 'cascade' },
             },
           },
         },

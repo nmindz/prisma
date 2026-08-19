@@ -78,6 +78,14 @@ function checkField(tableName: string, field: SurrealField): void {
       { table: tableName, field: field.name },
     );
   }
+  const canBeAbsentOrEmpty =
+    field.type.kind === 'option' || field.type.kind === 'array' || field.type.kind === 'set';
+  if (field.reference.kind === 'unset' && !canBeAbsentOrEmpty) {
+    throw invalid(
+      `Field "${field.name}" on table "${tableName}" declares REFERENCE ON DELETE UNSET on a required link; SurrealDB accepts the DEFINE but rejects the delete at write time — wrap the type in option<...> to use UNSET`,
+      { table: tableName, field: field.name },
+    );
+  }
 }
 
 function checkUniqueNames(

@@ -27,7 +27,11 @@ import {
   SurrealStorage,
   validateSurrealTables,
 } from '@internal/surreal-contract';
-import type { SurrealFieldType, SurrealIndexVariant } from '@internal/surreal-contract/types';
+import type {
+  SurrealFieldType,
+  SurrealIndexVariant,
+  SurrealReferenceAction,
+} from '@internal/surreal-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import {
@@ -76,6 +80,58 @@ function defaultCodecFor(type: SurrealFieldType): string {
     default:
       return 'surrealdb/any@1';
   }
+}
+
+const ON_DELETE_ACTIONS: Readonly<Record<string, Exclude<SurrealReferenceAction['kind'], 'then'>>> =
+  {
+    Cascade: 'cascade',
+    SetNull: 'unset',
+    Restrict: 'reject',
+    NoAction: 'ignore',
+  };
+
+/**
+ * Maps a PSL `@relation(onDelete: …)` argument to the `REFERENCE ON DELETE`
+ * action a Surreal record-link field carries.
+ *
+ * `SetNull` can only be honored on an optional link: SurrealDB accepts
+ * `REFERENCE ON DELETE UNSET` on a required link at DEFINE time but rejects
+ * the delete itself at write time, which would make the schema a trap rather
+ * than a guarantee. Diagnosing it here keeps that failure at authoring time.
+ */
+function resolveOnDeleteAction(
+  attr: ResolvedAttribute,
+  ownerName: string,
+  fieldName: string,
+  isOptional: boolean,
+  sourceId: string,
+  diagnostics: ContractSourceDiagnostic[],
+): SurrealReferenceAction | undefined {
+  const raw = getNamedArgument(attr, 'onDelete');
+  if (raw === undefined) return undefined;
+
+  const kind = ON_DELETE_ACTIONS[raw];
+  if (kind === undefined) {
+    diagnostics.push({
+      code: 'PSL_UNSUPPORTED_ONDELETE_ACTION',
+      message: `Field "${ownerName}.${fieldName}" has @relation(onDelete: ${raw}), which SurrealDB cannot represent; supported actions are Cascade, SetNull, Restrict, and NoAction`,
+      sourceId,
+      span: attr.span,
+    });
+    return undefined;
+  }
+
+  if (kind === 'unset' && !isOptional) {
+    diagnostics.push({
+      code: 'PSL_UNSET_REQUIRES_OPTIONAL_RELATION',
+      message: `Field "${ownerName}.${fieldName}" has @relation(onDelete: SetNull) on a required relation; SurrealDB can only clear an optional link, so mark the field optional to use SetNull`,
+      sourceId,
+      span: attr.span,
+    });
+    return undefined;
+  }
+
+  return { kind };
 }
 
 function resolveTableName(model: ModelSymbol): string {
@@ -233,10 +289,23 @@ export function interpretPslDocumentToSurrealContract(
           ? { kind: 'option', of: recordType }
           : recordType;
 
+        const relationAttr = getAttribute(field.attributes, 'relation');
+        const onDelete = relationAttr
+          ? resolveOnDeleteAction(
+              relationAttr,
+              pslModel.name,
+              field.name,
+              field.optional,
+              sourceId,
+              diagnostics,
+            )
+          : undefined;
+
         fieldInputs.push({
           name: mappedName,
           type: finalType,
           codecId: defaultCodecFor(finalType),
+          ...(onDelete === undefined ? {} : { reference: onDelete }),
         });
 
         domainRelations[field.name] = {

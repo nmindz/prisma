@@ -12,6 +12,7 @@ import type {
   SurrealFieldType,
   SurrealIndexVariant,
   SurrealPermissions,
+  SurrealReferenceAction,
   SurrealStorageShape,
   SurrealTableType,
 } from '@internal/surreal-contract/types';
@@ -29,6 +30,8 @@ export interface FieldDefinition {
   readonly assert?: string;
   readonly permissions?: SurrealPermissions;
   readonly comment?: string;
+  /** Only valid on a field whose type holds a `record<…>` link. */
+  readonly onDelete?: Exclude<SurrealReferenceAction['kind'], 'then'>;
 }
 
 export interface IndexDefinition {
@@ -100,6 +103,7 @@ function storageEntries(definition: ContractDefinition): SurrealNamespaceTablesI
         ...(field.assert === undefined ? {} : { assertExpression: field.assert }),
         ...(field.permissions === undefined ? {} : { permissions: field.permissions }),
         ...(field.comment === undefined ? {} : { comment: field.comment }),
+        ...(field.onDelete === undefined ? {} : { reference: { kind: field.onDelete } }),
       })),
       indexes: Object.entries(spec.indexes ?? {}).map(([indexName, spec2]) => ({
         name: indexName,

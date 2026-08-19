@@ -112,6 +112,72 @@ describe('renderDefineField', () => {
     );
   });
 
+  it.each([
+    ['reject', 'REFERENCE ON DELETE REJECT'],
+    ['ignore', 'REFERENCE ON DELETE IGNORE'],
+    ['unset', 'REFERENCE ON DELETE UNSET'],
+  ] as const)('renders a record link with ON DELETE %s', (kind, clause) => {
+    expect(
+      renderDefineField(
+        'post',
+        new SurrealField({
+          name: 'author',
+          type: { kind: 'record', tables: ['person'] },
+          codecId: 'c',
+          reference: { kind },
+        }),
+      ),
+    ).toBe(`DEFINE FIELD \`author\` ON TABLE \`post\` TYPE record<\`person\`> ${clause}`);
+  });
+
+  it('renders ON DELETE THEN with its custom expression', () => {
+    expect(
+      renderDefineField(
+        'post',
+        new SurrealField({
+          name: 'author',
+          type: { kind: 'record', tables: ['person'] },
+          codecId: 'c',
+          reference: { kind: 'then', expression: 'UPDATE $this SET author = NONE' },
+        }),
+      ),
+    ).toBe(
+      'DEFINE FIELD `author` ON TABLE `post` TYPE record<`person`> REFERENCE ON DELETE THEN UPDATE $this SET author = NONE',
+    );
+  });
+
+  it('renders ON DELETE UNSET on an optional record link', () => {
+    expect(
+      renderDefineField(
+        'post',
+        new SurrealField({
+          name: 'author',
+          type: { kind: 'option', of: { kind: 'record', tables: ['person'] } },
+          codecId: 'c',
+          reference: { kind: 'unset' },
+        }),
+      ),
+    ).toBe(
+      'DEFINE FIELD `author` ON TABLE `post` TYPE option<record<`person`>> REFERENCE ON DELETE UNSET',
+    );
+  });
+
+  it('renders ON DELETE UNSET on an array of record links', () => {
+    expect(
+      renderDefineField(
+        'post',
+        new SurrealField({
+          name: 'authors',
+          type: { kind: 'array', of: { kind: 'record', tables: ['person'] } },
+          codecId: 'c',
+          reference: { kind: 'unset' },
+        }),
+      ),
+    ).toBe(
+      'DEFINE FIELD `authors` ON TABLE `post` TYPE array<record<`person`>> REFERENCE ON DELETE UNSET',
+    );
+  });
+
   it('renders DEFAULT, VALUE, ASSERT and READONLY in SurrealQL order', () => {
     expect(
       field({
