@@ -1,3 +1,4 @@
+import type { SurrealIndex } from '@internal/surreal-contract';
 import type {
   OrderTerm,
   Projection,
@@ -6,7 +7,7 @@ import type {
   SurrealQuery,
   SurrealStatement,
 } from '@internal/surreal-query-ast';
-import { all, field, fn, obj } from '@internal/surreal-query-ast';
+import { all, and, arr, binary, field, fn, letRef, obj } from '@internal/surreal-query-ast';
 import type { SurrealQueryPlan, SurrealResultShape } from '@internal/surreal-query-ast/plan';
 import { RecordId } from '@internal/surreal-value';
 import { structuredError } from '@internal/utils/structured-error';
@@ -55,13 +56,38 @@ export interface CreateArgs {
   readonly select?: SelectInput;
 }
 
-export interface UpsertArgs {
+/** `upsert`'s record-id form — unchanged since before the unique-key form existed. */
+export interface UpsertByIdArgs {
   /** The record to create if absent, or update in place if present. */
   readonly id: RecordKeyInput;
   readonly data: Readonly<Record<string, unknown>>;
   /** `MERGE` keeps unlisted fields; the default `CONTENT` replaces the record. */
   readonly merge?: boolean;
 }
+
+/**
+ * `upsert`'s unique-key form.
+ *
+ * `where` must name exactly the fields of one unique index declared on the
+ * table's contract — every field the index covers, and no others — the way
+ * `id` names one record for the id form.
+ */
+export interface UpsertByUniqueArgs {
+  readonly where: Readonly<Record<string, unknown>>;
+  readonly data: Readonly<Record<string, unknown>>;
+  /** `MERGE` keeps unlisted fields; the default `CONTENT` replaces the record. */
+  readonly merge?: boolean;
+  /**
+   * Set when this plan is going to run inside a caller-managed transaction —
+   * `runtime.batch([...])`, most commonly — instead of standalone. SurrealDB
+   * rejects a nested `BEGIN`, so the lowered script omits its own
+   * `BEGIN`/`COMMIT` and leaves the result envelope to whichever statement in
+   * the batch runs last, the same accounting every other batched plan uses.
+   */
+  readonly inTransaction?: boolean;
+}
+
+export type UpsertArgs = UpsertByIdArgs | UpsertByUniqueArgs;
 
 export interface UpdateArgs {
   readonly where?: WhereInput;
@@ -233,13 +259,51 @@ function plan<Row>(
   statements: readonly SurrealStatement[],
   storageHash: string,
   resultShape?: SurrealResultShape,
+  resultIndex?: number,
 ): SurrealQueryPlan<Row> {
   const query: SurrealQuery = { statements };
   return {
     query,
     meta: { target: 'surrealdb', lane: 'orm', storageHash },
     ...(resultShape === undefined ? {} : { resultShape }),
+    ...(resultIndex === undefined ? {} : { resultIndex }),
   };
+}
+
+/**
+ * Finds the one unique index a `where` object names exactly — every field the
+ * index covers, and no others — or throws, listing the table's unique
+ * indexes so the caller can see what was expected.
+ */
+function matchUniqueIndex(
+  table: string,
+  where: Readonly<Record<string, unknown>>,
+  uniqueIndexes: ReadonlyArray<SurrealIndex>,
+): SurrealIndex {
+  const whereFields = new Set(Object.keys(where));
+  const match = uniqueIndexes.find(
+    (index) =>
+      index.fields.length === whereFields.size &&
+      index.fields.every((name) => whereFields.has(name)),
+  );
+  if (match !== undefined) return match;
+
+  const available = uniqueIndexes.map((index) => `(${index.fields.join(', ')})`);
+  throw structuredError(
+    'RUNTIME.AST_INVALID',
+    `upsert where must cover exactly one unique index declared on "${table}"; got (${[...whereFields].join(', ')}), but ${
+      available.length === 0
+        ? 'the table declares no unique indexes'
+        : `its unique indexes are: ${available.join(', ')}`
+    }`,
+    {
+      meta: {
+        table,
+        where: [...whereFields],
+        uniqueIndexes: uniqueIndexes.map((index) => ({ name: index.name, fields: index.fields })),
+      },
+    },
+  );
 }
 
 /**
@@ -253,11 +317,18 @@ export class SurrealCollection<Row = Record<string, unknown>> {
   readonly #table: string;
   readonly #storageHash: string;
   readonly #resultShape: SurrealResultShape | undefined;
+  readonly #uniqueIndexes: ReadonlyArray<SurrealIndex>;
 
-  constructor(table: string, storageHash: string, resultShape?: SurrealResultShape) {
+  constructor(
+    table: string,
+    storageHash: string,
+    resultShape?: SurrealResultShape,
+    indexes?: ReadonlyArray<SurrealIndex>,
+  ) {
     this.#table = table;
     this.#storageHash = storageHash;
     this.#resultShape = resultShape;
+    this.#uniqueIndexes = (indexes ?? []).filter((index) => index.variant.kind === 'unique');
   }
 
   findMany(args: FindManyArgs = {}): SurrealQueryPlan<Row> {
@@ -439,15 +510,21 @@ export class SurrealCollection<Row = Record<string, unknown>> {
    * the existing one — `CONTENT` (the default) replaces it, `MERGE` keeps
    * unlisted fields — if it does.
    *
-   * Only the record-id form is exposed. SurrealDB also allows `UPSERT
-   * table SET ... WHERE ...` over a whole table, but that form isn't
-   * id-keyed: verified against a live server, a `WHERE` that matches no
-   * rows still creates one, with a server-generated id unrelated to the
-   * filter — not the idempotent, keyed upsert this method's name promises.
-   * Reach for `create`/`update` directly if that unfiltered-write behavior
-   * is actually what's wanted.
+   * The record-id form (`UPSERT table:id ...`) is one of two forms. The
+   * other keys off a unique index instead of an id — see `#upsertByUnique`
+   * — for the common case where the caller has the natural key, not the
+   * generated record id.
+   *
+   * SurrealDB also allows `UPSERT table SET ... WHERE ...` over a whole
+   * table, but that form isn't id-keyed: verified against a live server, a
+   * `WHERE` that matches no rows still creates one, with a server-generated
+   * id unrelated to the filter — not the idempotent, keyed upsert this
+   * method's name promises. Reach for `create`/`update` directly if that
+   * unfiltered-write behavior is actually what's wanted.
    */
   upsert(args: UpsertArgs): SurrealQueryPlan<Row> {
+    if ('where' in args) return this.#upsertByUnique(args);
+
     const params = new ParamAllocator();
     const content = contentOf(args.data, params);
     return plan<Row>(
@@ -464,6 +541,117 @@ export class SurrealCollection<Row = Record<string, unknown>> {
       ],
       this.#storageHash,
       this.#resultShape,
+    );
+  }
+
+  /**
+   * `upsert`'s unique-key form: one round trip, no matter which branch runs.
+   *
+   * `$hit` holds the id of any existing row matching `where` (there can be
+   * at most one — `where` is checked against a unique index). Non-empty
+   * means update that row; empty means create a fresh one, seeded with
+   * `where` so the unique fields land on the new record too.
+   *
+   * The update branch's `CONTENT` payload (the non-`merge` case) re-asserts
+   * `where` alongside `data`, the same as the create branch — a bare
+   * `CONTENT $data` replaces the whole record and would erase the very
+   * fields `where` matched on, so a later call keyed on the same `where`
+   * would no longer find this row and would create a duplicate instead.
+   * `merge: true` doesn't need this: `MERGE` only touches the fields named
+   * in `data`, so the unique fields already on the row survive untouched.
+   *
+   * Standalone, the script carries its own `BEGIN`/`COMMIT` so the read and
+   * the write commit atomically — otherwise a racing writer could slip in
+   * between the `SELECT` and the `UPDATE`/`CREATE`. Inside a caller-managed
+   * transaction (`inTransaction: true`), `BEGIN`/`COMMIT` are omitted:
+   * SurrealDB rejects a nested transaction, and the surrounding batch is
+   * already the atomic unit.
+   */
+  #upsertByUnique(args: UpsertByUniqueArgs): SurrealQueryPlan<Row> {
+    const index = matchUniqueIndex(this.#table, args.where, this.#uniqueIndexes);
+    const params = new ParamAllocator();
+    const eqTerms = index.fields.map((name) =>
+      binary('=', field(name), params.bind(args.where[name])),
+    );
+    const updateContent =
+      args.merge === true
+        ? contentOf(args.data, params)
+        : contentOf({ ...args.where, ...args.data }, params);
+    const createContent = contentOf({ ...args.where, ...args.data }, params);
+
+    const hitId: SurrealExpr = {
+      kind: 'raw',
+      parts: [
+        { kind: 'expr', expr: letRef('hit') },
+        { kind: 'text', text: '[0].id' },
+      ],
+    };
+    const letStatement: SurrealStatement = {
+      kind: 'let',
+      name: 'hit',
+      expr: {
+        kind: 'subquery',
+        statement: {
+          kind: 'select',
+          projections: [{ expr: field('id') }],
+          from: [{ kind: 'table', name: this.#table }],
+          where: and(...eqTerms),
+          limit: 1,
+        },
+      },
+    };
+    const ifStatement: SurrealStatement = {
+      kind: 'raw-statement',
+      parts: [
+        {
+          kind: 'expr',
+          expr: {
+            kind: 'if',
+            branches: [
+              {
+                when: binary('!=', letRef('hit'), arr()),
+                // biome-ignore lint/suspicious/noThenProperty: IfExpr's branch shape names this field `then` for SurrealQL's IF/THEN/ELSE, not a thenable
+                then: {
+                  kind: 'subquery',
+                  statement: {
+                    kind: 'update',
+                    target: { kind: 'expr', expr: hitId },
+                    payload:
+                      args.merge === true
+                        ? { kind: 'merge', value: updateContent }
+                        : { kind: 'content', value: updateContent },
+                    returns: { kind: 'after' },
+                  },
+                },
+              },
+            ],
+            otherwise: {
+              kind: 'subquery',
+              statement: {
+                kind: 'create',
+                target: { kind: 'table', name: this.#table },
+                payload: { kind: 'content', value: createContent },
+                returns: { kind: 'after' },
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    if (args.inTransaction === true) {
+      return plan<Row>([letStatement, ifStatement], this.#storageHash, this.#resultShape);
+    }
+    return plan<Row>(
+      [
+        { kind: 'raw-statement', parts: [{ kind: 'text', text: 'BEGIN TRANSACTION' }] },
+        letStatement,
+        ifStatement,
+        { kind: 'raw-statement', parts: [{ kind: 'text', text: 'COMMIT TRANSACTION' }] },
+      ],
+      this.#storageHash,
+      this.#resultShape,
+      2,
     );
   }
 

@@ -1,3 +1,4 @@
+import { SurrealIndex } from '@internal/surreal-contract';
 import { lowerQuery } from '@internal/surreal-lowering';
 import { RecordId } from '@internal/surreal-value';
 import { describe, expect, it } from 'vitest';
@@ -227,6 +228,123 @@ describe('upsert', () => {
     expect(
       surql(person.upsert({ id: new RecordId('person', 'ada'), data: { age: 40 } })).surql,
     ).toBe('UPSERT `person`:`ada` CONTENT { `age`: $p0 } RETURN AFTER');
+  });
+});
+
+describe('upsert by unique index', () => {
+  const emailIndex = new SurrealIndex({
+    name: 'person_email_unique',
+    fields: ['email'],
+    variant: { kind: 'unique' },
+  });
+  const orgSlugIndex = new SurrealIndex({
+    name: 'event_org_slug_unique',
+    fields: ['orgId', 'slug'],
+    variant: { kind: 'unique' },
+  });
+  const personWithEmail = new SurrealCollection('person', 'sh', undefined, [emailIndex]);
+  const eventWithSlug = new SurrealCollection('event', 'sh', undefined, [orgSlugIndex]);
+
+  it('keys a single-field unique index, standalone in its own transaction', () => {
+    const lowered = surql(
+      personWithEmail.upsert({ where: { email: 'grace@example.com' }, data: { name: 'grace' } }),
+    );
+    expect(lowered.surql).toBe(
+      [
+        'BEGIN TRANSACTION',
+        'LET $hit = (SELECT `id` FROM `person` WHERE (`email` = $p0) LIMIT 1)',
+        'IF $hit != [] THEN (UPDATE $hit[0].id CONTENT { `email`: $p1, `name`: $p2 } RETURN AFTER) ELSE (CREATE `person` CONTENT { `email`: $p3, `name`: $p4 } RETURN AFTER) END',
+        'COMMIT TRANSACTION',
+      ].join(';\n'),
+    );
+    expect(lowered.params.map((p) => p.value)).toEqual([
+      'grace@example.com',
+      'grace@example.com',
+      'grace',
+      'grace@example.com',
+      'grace',
+    ]);
+  });
+
+  it('merges into the matched record with MERGE instead of CONTENT', () => {
+    const lowered = surql(
+      personWithEmail.upsert({
+        where: { email: 'grace@example.com' },
+        data: { name: 'grace' },
+        merge: true,
+      }),
+    );
+    expect(lowered.surql).toContain(
+      'IF $hit != [] THEN (UPDATE $hit[0].id MERGE { `name`: $p1 } RETURN AFTER)',
+    );
+  });
+
+  it('picks the IF statement result envelope, not COMMIT', () => {
+    const plan = personWithEmail.upsert({
+      where: { email: 'grace@example.com' },
+      data: { name: 'grace' },
+    });
+    expect(plan.resultIndex).toBe(2);
+  });
+
+  it('keys a composite unique index, binding every field of the index', () => {
+    const lowered = surql(
+      eventWithSlug.upsert({
+        where: { orgId: 'org1', slug: 'launch' },
+        data: { name: 'Launch Day' },
+      }),
+    );
+    expect(lowered.surql).toBe(
+      [
+        'BEGIN TRANSACTION',
+        'LET $hit = (SELECT `id` FROM `event` WHERE (`orgId` = $p0 AND `slug` = $p1) LIMIT 1)',
+        'IF $hit != [] THEN (UPDATE $hit[0].id CONTENT { `orgId`: $p2, `slug`: $p3, `name`: $p4 } RETURN AFTER) ELSE (CREATE `event` CONTENT { `orgId`: $p5, `slug`: $p6, `name`: $p7 } RETURN AFTER) END',
+        'COMMIT TRANSACTION',
+      ].join(';\n'),
+    );
+    expect(lowered.params.map((p) => p.value)).toEqual([
+      'org1',
+      'launch',
+      'org1',
+      'launch',
+      'Launch Day',
+      'org1',
+      'launch',
+      'Launch Day',
+    ]);
+  });
+
+  it('drops BEGIN/COMMIT and the result envelope override inside a caller-managed transaction', () => {
+    const plan = personWithEmail.upsert({
+      where: { email: 'grace@example.com' },
+      data: { name: 'grace' },
+      inTransaction: true,
+    });
+    expect(plan.resultIndex).toBeUndefined();
+    expect(surql(plan).surql).toBe(
+      [
+        'LET $hit = (SELECT `id` FROM `person` WHERE (`email` = $p0) LIMIT 1)',
+        'IF $hit != [] THEN (UPDATE $hit[0].id CONTENT { `email`: $p1, `name`: $p2 } RETURN AFTER) ELSE (CREATE `person` CONTENT { `email`: $p3, `name`: $p4 } RETURN AFTER) END',
+      ].join(';\n'),
+    );
+  });
+
+  it('rejects a where that names no declared unique index', () => {
+    expect(() => person.upsert({ where: { email: 'grace@example.com' }, data: {} })).toThrow(
+      /the table declares no unique indexes/,
+    );
+  });
+
+  it('rejects a where that does not match any declared unique index', () => {
+    expect(() => personWithEmail.upsert({ where: { name: 'grace' }, data: {} })).toThrow(
+      /its unique indexes are: \(email\)/,
+    );
+  });
+
+  it('rejects a where that only partially covers a composite unique index', () => {
+    expect(() => eventWithSlug.upsert({ where: { orgId: 'org1' }, data: {} })).toThrow(
+      /its unique indexes are: \(orgId, slug\)/,
+    );
   });
 });
 

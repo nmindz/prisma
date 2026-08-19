@@ -46,7 +46,12 @@ export function orm<TContract extends Contract<SurrealStorageShape>>(
 
   const collections: Record<string, SurrealCollection> = {};
   for (const table of Object.keys(tables)) {
-    collections[table] = new SurrealCollection(table, storageHash);
+    collections[table] = new SurrealCollection(
+      table,
+      storageHash,
+      undefined,
+      tables[table]?.indexes,
+    );
   }
 
   return blindCast<

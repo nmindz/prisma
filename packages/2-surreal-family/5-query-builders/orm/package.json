@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@internal/driver-surrealdb": "workspace:8.0.0-rc.14",
+    "@internal/surreal-errors": "workspace:8.0.0-rc.14",
     "@internal/surreal-lowering": "workspace:8.0.0-rc.14",
     "@repo/tsconfig": "workspace:8.0.0-rc.14",
     "@repo/tsdown": "workspace:8.0.0-rc.14",

@@ -43,6 +43,38 @@ describe('orm', () => {
     expect(db['person']?.findMany().meta.storageHash).toBe('sh');
   });
 
+  it('threads a table declared unique index into its collection', () => {
+    const contract: Contract<SurrealStorageShape> = blindCast<
+      Contract<SurrealStorageShape>,
+      'a minimal contract literal carrying one table with a unique index'
+    >({
+      storage: {
+        storageHash: 'sh',
+        namespaces: {
+          __unbound__: buildSurrealNamespace({
+            id: '__unbound__',
+            entries: {
+              table: {
+                person: new SurrealTable({
+                  indexes: [
+                    { name: 'person_email_unique', fields: ['email'], variant: { kind: 'unique' } },
+                  ],
+                }),
+              },
+            },
+          }),
+        },
+      },
+    });
+
+    const db = orm(contract);
+    const plan = db['person']?.upsert({
+      where: { email: 'ada@example.com' },
+      data: { name: 'ada' },
+    });
+    expect(plan?.query.statements).toHaveLength(4);
+  });
+
   it('types table names off a contract that carries literal ones', () => {
     // A generated `contract.d.ts` gives literal table names; the map then has
     // exactly those keys, and a misspelt one is a compile error.

@@ -1,4 +1,6 @@
 import { SurrealDriverImpl } from '@internal/driver-surrealdb/runtime';
+import { SurrealIndex } from '@internal/surreal-contract';
+import { SurrealQueryError } from '@internal/surreal-errors';
 import { lowerQuery } from '@internal/surreal-lowering';
 import type { SurrealQueryPlan } from '@internal/surreal-query-ast/plan';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -34,7 +36,11 @@ describe.skipIf(!available)('upsert and groupBy against a live SurrealDB', () =>
     const lowered = lowerQuery(plan.query);
     const vars = Object.fromEntries(lowered.params.map((p) => [p.name, p.value]));
     const rows: Row[] = [];
-    for await (const row of driver.query<Row>({ surql: lowered.surql, vars })) {
+    for await (const row of driver.query<Row>({
+      surql: lowered.surql,
+      vars,
+      ...(plan.resultIndex === undefined ? {} : { resultIndex: plan.resultIndex }),
+    })) {
       rows.push(row);
     }
     return rows;
@@ -79,6 +85,104 @@ describe.skipIf(!available)('upsert and groupBy against a live SurrealDB', () =>
       await run(person.upsert({ id: 'merge-me', data: { name: 'grace', age: 40 } }));
       const merged = await run(person.upsert({ id: 'merge-me', data: { age: 41 }, merge: true }));
       expect(merged[0]).toMatchObject({ name: 'grace', age: 41 });
+    });
+  });
+
+  describe('upsert by unique index', () => {
+    const emailIndex = new SurrealIndex({
+      name: 'contact_email_unique',
+      fields: ['email'],
+      variant: { kind: 'unique' },
+    });
+    const orgSlugIndex = new SurrealIndex({
+      name: 'listing_org_slug_unique',
+      fields: ['orgId', 'slug'],
+      variant: { kind: 'unique' },
+    });
+    const contact = new SurrealCollection<{ id: unknown; email: string; name: string }>(
+      'contact',
+      'sh',
+      undefined,
+      [emailIndex],
+    );
+    const listing = new SurrealCollection<{
+      id: unknown;
+      orgId: string;
+      slug: string;
+      title: string;
+    }>('listing', 'sh', undefined, [orgSlugIndex]);
+
+    beforeAll(async () => {
+      await exec('REMOVE TABLE IF EXISTS `contact`');
+      await exec('REMOVE TABLE IF EXISTS `listing`');
+      await exec('DEFINE INDEX contact_email_unique ON TABLE contact FIELDS email UNIQUE');
+      await exec('DEFINE INDEX listing_org_slug_unique ON TABLE listing FIELDS orgId, slug UNIQUE');
+    });
+
+    it('creates the record when no row matches the unique key', async () => {
+      const created = await run(
+        contact.upsert({ where: { email: 'ada@example.com' }, data: { name: 'ada' } }),
+      );
+      expect(created).toHaveLength(1);
+      expect(created[0]).toMatchObject({ email: 'ada@example.com', name: 'ada' });
+    });
+
+    it('updates the existing record in place when the unique key already exists', async () => {
+      await run(contact.upsert({ where: { email: 'grace@example.com' }, data: { name: 'grace' } }));
+      const updated = await run(
+        contact.upsert({
+          where: { email: 'grace@example.com' },
+          data: { name: 'grace hopper' },
+        }),
+      );
+      expect(updated).toHaveLength(1);
+      expect(updated[0]).toMatchObject({ email: 'grace@example.com', name: 'grace hopper' });
+
+      const all = await run(contact.findMany({ where: { email: 'grace@example.com' } }));
+      expect(all).toHaveLength(1);
+    });
+
+    it('keys a composite unique index across two fields', async () => {
+      const created = await run(
+        listing.upsert({ where: { orgId: 'org1', slug: 'launch' }, data: { title: 'Launch' } }),
+      );
+      expect(created).toHaveLength(1);
+
+      const updated = await run(
+        listing.upsert({
+          where: { orgId: 'org1', slug: 'launch' },
+          data: { title: 'Launch Day' },
+        }),
+      );
+      expect(updated[0]).toMatchObject({ title: 'Launch Day' });
+
+      const rows = await run(listing.findMany({ where: { orgId: 'org1' } }));
+      expect(rows).toHaveLength(1);
+    });
+
+    it('lets exactly one of five concurrent upserts on an absent key win', async () => {
+      const results = await Promise.allSettled(
+        Array.from({ length: 5 }, () =>
+          run(contact.upsert({ where: { email: 'race@example.com' }, data: { name: 'racer' } })),
+        ),
+      );
+
+      const rows = await run(contact.findMany({ where: { email: 'race@example.com' } }));
+      expect(rows).toHaveLength(1);
+
+      // A losing racer's failure is reported against the whole BEGIN/COMMIT
+      // script, not the specific statement that lost, so SurrealDB surfaces
+      // a generic transaction-failure message rather than the `Database
+      // index ... already contains` wording `isUniqueConstraintViolation`
+      // matches on. What every rejection reliably carries is a classified
+      // `SurrealQueryError` rather than a raw network/protocol error, so
+      // that is what this asserts; the one-row invariant above is the
+      // durable guarantee this lowering makes.
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          expect(SurrealQueryError.is(result.reason)).toBe(true);
+        }
+      }
     });
   });
 
