@@ -5623,6 +5623,9 @@ importers:
       '@internal/family-surreal':
         specifier: workspace:8.0.0-rc.3
         version: link:../../../2-surreal-family/9-family
+      '@internal/surreal-cbor':
+        specifier: workspace:8.0.0-rc.3
+        version: link:../../../2-surreal-family/6-transport/surreal-cbor
       '@internal/surreal-codec':
         specifier: workspace:8.0.0-rc.3
         version: link:../../../2-surreal-family/1-foundation/surreal-codec

@@ -12,8 +12,13 @@
  * a value tells you what it is regardless of which copy built it. Symbol keys
  * are also invisible to `Object.keys`, `Object.entries` and `JSON.stringify`,
  * so the brand never leaks into a payload.
+ *
+ * The key deliberately does not spell an `@internal/*` package name: the
+ * published shells must not carry internal package names in their dist, and
+ * a registry key is the one place this module's name would otherwise survive
+ * bundling verbatim.
  */
-export const SURREAL_KIND: unique symbol = Symbol.for('@internal/surreal-value/kind');
+export const SURREAL_KIND: unique symbol = Symbol.for('prisma.surreal.value.kind');
 
 export type SurrealValueKind =
   | 'record-id'

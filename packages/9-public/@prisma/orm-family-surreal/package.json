@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@internal/family-surreal": "workspace:8.0.0-rc.3",
+    "@internal/surreal-cbor": "workspace:8.0.0-rc.3",
     "@internal/surreal-codec": "workspace:8.0.0-rc.3",
     "@internal/surreal-contract": "workspace:8.0.0-rc.3",
     "@internal/surreal-contract-ts": "workspace:8.0.0-rc.3",
