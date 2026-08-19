@@ -49,6 +49,31 @@ describe('SurrealDiffNode', () => {
     expect(node.isEqualTo(new SurrealDiffNode('surreal-field', 'person', person))).toBe(false);
     expect(node.isEqualTo(new SurrealDiffNode('surreal-table', 'other', person))).toBe(false);
   });
+
+  it('compares structurally, so a node from another bundle of this same class still matches', () => {
+    // Simulates the cross-bundle case: a differently-constructed object with
+    // the same shape, which fails `instanceof SurrealDiffNode` when built by
+    // a separately-bundled copy of this module even though it is the same
+    // type. `isEqualTo` must not depend on `instanceof` to recognise it.
+    const other = {
+      nodeKind: 'surreal-table',
+      id: 'person',
+      definition: personEchoed,
+      isEqualTo: () => false,
+      children: () => [],
+    };
+    expect(new SurrealDiffNode('surreal-table', 'person', person).isEqualTo(other)).toBe(true);
+  });
+
+  it('rejects a same-shaped node whose definition is not a string', () => {
+    const other = {
+      nodeKind: 'surreal-table',
+      id: 'person',
+      isEqualTo: () => false,
+      children: () => [],
+    };
+    expect(new SurrealDiffNode('surreal-table', 'person', person).isEqualTo(other)).toBe(false);
+  });
 });
 
 describe('surrealSchemaIssues', () => {

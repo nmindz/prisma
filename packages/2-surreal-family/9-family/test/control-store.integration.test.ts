@@ -155,6 +155,25 @@ describe.skipIf(!available)('control-plane storage against a live SurrealDB', ()
     expect([...all.keys()].filter((k) => k === 'written')).toHaveLength(1);
   });
 
+  it('rejects a hand-written row whose date field is not a date, at the schema boundary', async () => {
+    await ensureControlTables(driver);
+    // SCHEMAFULL plus a typed `updatedAt` means a row shaped like the ones
+    // `marker-store.test.ts` fabricates to exercise the corrupt-row throw
+    // cannot actually reach this table through SurrealQL: the write is
+    // rejected before the row ever exists to be read back. The application-
+    // level throw in `readDate`/`spaceOf` is defense in depth for rows that
+    // arrive some other way (a downgrade, a manual migration, cross-driver
+    // writes), not the first line of defense.
+    await expect(
+      run(
+        `CREATE type::record('${MARKER_TABLE}', 'corrupt') CONTENT { storageHash: 'sh', profileHash: 'ph', updatedAt: 'not-a-date', meta: {}, invariants: [] } RETURN NONE`,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("Couldn't coerce value for field `updatedAt`"),
+    });
+    expect(await readMarkerRow(driver, 'corrupt')).toBeNull();
+  });
+
   it('hides the control tables from an introspected schema', async () => {
     await run('DEFINE TABLE `person` TYPE NORMAL SCHEMAFULL');
     await run('DEFINE FIELD `name` ON TABLE `person` TYPE string');

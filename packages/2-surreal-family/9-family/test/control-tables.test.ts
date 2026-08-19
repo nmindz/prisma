@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CONTROL_TABLE_DDL,
-  LEDGER_TABLE,
-  MARKER_TABLE,
-  markerRecordId,
-} from '../src/exports/control';
+import { CONTROL_TABLE_DDL, LEDGER_TABLE, MARKER_TABLE } from '../src/exports/control';
 
 describe('control table DDL', () => {
   it('guards every statement with IF NOT EXISTS', () => {
@@ -39,15 +34,5 @@ describe('control table DDL', () => {
   it('prefixes both tables so they cannot collide with application tables', () => {
     expect(MARKER_TABLE.startsWith('_prisma_')).toBe(true);
     expect(LEDGER_TABLE.startsWith('_prisma_')).toBe(true);
-  });
-});
-
-describe('markerRecordId', () => {
-  it('keys the marker by its space, so a read is a point lookup', () => {
-    expect(markerRecordId('app')).toBe(`${MARKER_TABLE}:⟨app⟩`);
-  });
-
-  it('brackets a space whose name would not parse bare', () => {
-    expect(markerRecordId('ext:pgvector')).toBe(`${MARKER_TABLE}:⟨ext:pgvector⟩`);
   });
 });

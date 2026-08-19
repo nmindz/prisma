@@ -27,8 +27,12 @@ describe('quoteIdentifier', () => {
     );
   });
 
-  it('rejects a NUL, which has no SurrealQL identifier escape', () => {
-    expect(() => quoteIdentifier(`a${NUL}b`)).toThrow(/NUL/);
+  it('escapes a NUL the same way SurrealDB renders it back, instead of rejecting it', () => {
+    expect(quoteIdentifier(`a${NUL}b`)).toBe('`a\\0b`');
+  });
+
+  it('escapes tab/newline/CR rather than embedding them raw', () => {
+    expect(quoteIdentifier('a\tb\nc\rd')).toBe('`a\\tb\\nc\\rd`');
   });
 });
 
@@ -57,5 +61,9 @@ describe('escapeStringLiteral', () => {
 
   it('leaves a double quote alone inside single quotes', () => {
     expect(escapeStringLiteral('say "hi"')).toBe('\'say "hi"\'');
+  });
+
+  it('rejects a NUL, matching quoteIdentifier instead of embedding it raw', () => {
+    expect(() => escapeStringLiteral(`a${NUL}b`)).toThrow(/NUL/);
   });
 });

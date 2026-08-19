@@ -114,6 +114,32 @@ export interface SurrealdbClient<TContract extends Contract<SurrealStorageShape>
   [Symbol.asyncDispose](): Promise<void>;
 }
 
+/** Which cleanup step failed, for the warning message and its dedicated code. */
+type CleanupPhase = 'rollback' | 'release' | 'pending connect';
+
+const CLEANUP_WARNING_CODE: Record<CleanupPhase, string> = {
+  rollback: 'PN_SURREALDB_ROLLBACK_ERROR',
+  release: 'PN_SURREALDB_RELEASE_ERROR',
+  'pending connect': 'PN_SURREALDB_PENDING_CONNECT_ERROR',
+};
+
+/**
+ * A cleanup step (rolling back, releasing a connection, or draining a
+ * pending connect on `close()`) is not the caller's error to receive — the
+ * caller is already getting the error that triggered the cleanup, or is
+ * calling `close()` for reasons unrelated to a stale connect attempt.
+ * Swallowing the cleanup failure entirely, though, hides a real fault (a
+ * connection the driver could not roll back, or leaked). Routing it to a
+ * process warning — the same mechanism the driver's live-query handler
+ * errors use — keeps it observable without changing what the caller awaits.
+ */
+function reportCleanupFailure(phase: CleanupPhase, error: unknown): void {
+  const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  process.emitWarning(`SurrealDB ${phase} failed during cleanup: ${detail}`, {
+    code: CLEANUP_WARNING_CODE[phase],
+  });
+}
+
 function resolveBinding(input: SurrealdbConnectionInput): SurrealBinding | undefined {
   if (input.url === undefined || input.namespace === undefined || input.database === undefined) {
     return undefined;
@@ -144,6 +170,59 @@ function resolveContract<TContract extends Contract<SurrealStorageShape>>(
     TContract,
     'SurrealContractSerializer validates the envelope against SurrealContractSchema and hydrates it; the caller states which contract type that JSON was emitted for'
   >(serializer.deserializeContract(json));
+}
+
+/**
+ * Runs `fn` against one held-open transaction, then commits or rolls back.
+ *
+ * Exported (rather than kept as a closure inside `surrealdb()`) so the
+ * cleanup-failure paths — a rollback or a release that itself throws — are
+ * reachable from a unit test against fake `connection`/`transaction` objects,
+ * with no driver or live server involved.
+ */
+export async function runInTransaction<TContract extends Contract<SurrealStorageShape>, R>(
+  surql: RawLane<TContract>,
+  fn: (tx: SurrealdbTransactionContext<TContract>) => PromiseLike<R>,
+  connection: SurrealConnection,
+  transaction: SurrealTransaction,
+): Promise<R> {
+  const runOnTransaction = async (plan: SurrealQueryPlan): Promise<unknown[]> => {
+    const lowered = lowerQuery(plan.query);
+    const vars = Object.fromEntries(lowered.params.map((p) => [p.name, p.value]));
+    const rows: unknown[] = [];
+    for await (const row of transaction.query({ surql: lowered.surql, vars })) rows.push(row);
+    return rows;
+  };
+
+  const tx: SurrealdbTransactionContext<TContract> = {
+    surql,
+    async query<Row>(plan: SurrealQueryPlan<Row>): Promise<Row[]> {
+      return blindCast<
+        Row[],
+        'rows inside a transaction skip the runtime decode path; the caller states the row type the raw statement returns'
+      >(await runOnTransaction(plan));
+    },
+    async execute(plan: SurrealQueryPlan): Promise<RuntimeStatementStats> {
+      const lowered = lowerQuery(plan.query);
+      const vars = Object.fromEntries(lowered.params.map((p) => [p.name, p.value]));
+      return transaction.execute({ surql: lowered.surql, vars });
+    },
+  };
+
+  try {
+    const result = await fn(tx);
+    await transaction.commit();
+    return result;
+  } catch (error) {
+    await transaction.rollback().catch((rollbackError: unknown) => {
+      reportCleanupFailure('rollback', rollbackError);
+    });
+    throw error;
+  } finally {
+    await connection.release().catch((releaseError: unknown) => {
+      reportCleanupFailure('release', releaseError);
+    });
+  }
 }
 
 /**
@@ -225,46 +304,6 @@ export default function surrealdb<TContract extends Contract<SurrealStorageShape
     return connectPromise;
   };
 
-  const runInTransaction = async <R>(
-    fn: (tx: SurrealdbTransactionContext<TContract>) => PromiseLike<R>,
-    connection: SurrealConnection,
-    transaction: SurrealTransaction,
-  ): Promise<R> => {
-    const runOnTransaction = async (plan: SurrealQueryPlan): Promise<unknown[]> => {
-      const lowered = lowerQuery(plan.query);
-      const vars = Object.fromEntries(lowered.params.map((p) => [p.name, p.value]));
-      const rows: unknown[] = [];
-      for await (const row of transaction.query({ surql: lowered.surql, vars })) rows.push(row);
-      return rows;
-    };
-
-    const tx: SurrealdbTransactionContext<TContract> = {
-      surql,
-      async query<Row>(plan: SurrealQueryPlan<Row>): Promise<Row[]> {
-        return blindCast<
-          Row[],
-          'rows inside a transaction skip the runtime decode path; the caller states the row type the raw statement returns'
-        >(await runOnTransaction(plan));
-      },
-      async execute(plan: SurrealQueryPlan): Promise<RuntimeStatementStats> {
-        const lowered = lowerQuery(plan.query);
-        const vars = Object.fromEntries(lowered.params.map((p) => [p.name, p.value]));
-        return transaction.execute({ surql: lowered.surql, vars });
-      },
-    };
-
-    try {
-      const result = await fn(tx);
-      await transaction.commit();
-      return result;
-    } catch (error) {
-      await transaction.rollback().catch(() => undefined);
-      throw error;
-    } finally {
-      await connection.release().catch(() => undefined);
-    }
-  };
-
   return {
     surql,
     orm: collections,
@@ -308,12 +347,14 @@ export default function surrealdb<TContract extends Contract<SurrealStorageShape
       }
       const connection = await driverInstance.acquireConnection();
       const transaction = await connection.beginTransaction();
-      return runInTransaction(fn, connection, transaction);
+      return runInTransaction(surql, fn, connection, transaction);
     },
     async close(): Promise<void> {
       if (closed) return;
       closed = true;
-      await connectPromise?.catch(() => undefined);
+      await connectPromise?.catch((error: unknown) => {
+        reportCleanupFailure('pending connect', error);
+      });
       await driverInstance?.close();
     },
     [Symbol.asyncDispose](): Promise<void> {

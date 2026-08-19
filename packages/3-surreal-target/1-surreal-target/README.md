@@ -27,10 +27,9 @@ which is what lets the lowerer decide that a `decimal` bind site needs a
 string, and passes a fetched object straight through — the same declared field
 arrives both ways depending on whether the query said `FETCH`.
 
-## DDL is version-specific, and was verified against the server
+## DDL is version-specific
 
-SurrealDB v3 moved several keywords, and each of these was confirmed against a
-running v3.2.4 rather than taken from documentation:
+SurrealDB v3 moved several keywords; under v3.2.4:
 
 | Rule | Evidence |
 | --- | --- |

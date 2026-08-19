@@ -10,13 +10,6 @@ export const MARKER_TABLE = '_prisma_contract_marker';
 export const LEDGER_TABLE = '_prisma_migration_ledger';
 
 /**
- * The marker is keyed by contract space, so the record id *is* the space:
- * `_prisma_contract_marker:app`. One row per space, and reading one is a
- * point lookup rather than a filtered scan.
- */
-export const markerRecordId = (space: string): string => `${MARKER_TABLE}:⟨${space}⟩`;
-
-/**
  * DDL for the control tables, in dependency order.
  *
  * Hand-written rather than rendered from contract IR, so the SurrealQL rules

@@ -2,6 +2,24 @@ import type { DiffableNode } from '@internal/framework-components/control';
 import { canonicalizeDefinition } from '@internal/surreal-schema-ir';
 
 /**
+ * Structural stand-in for `instanceof SurrealDiffNode`.
+ *
+ * Every package in the workspace bundles its own copy of this module, so a
+ * node built inside one bundle is never `instanceof` the `SurrealDiffNode`
+ * another bundle exports even though it is the same shape — the generic
+ * differ (`@internal/framework-components/control`) already runs Postgres
+ * and SQLite operands through `isEqualTo` across exactly this kind of
+ * boundary, and both siblings compare by a declared identity (`nodeKind`)
+ * rather than JS class identity for the same reason. `SurrealDiffNode` has
+ * no sibling classes to discriminate between, so `definition` — the one
+ * field no other `DiffableNode` shape in the framework's diff trees carries —
+ * is what distinguishes it structurally.
+ */
+function isSurrealDiffNode(node: DiffableNode): node is SurrealDiffNode {
+  return 'definition' in node && typeof node.definition === 'string';
+}
+
+/**
  * A schema object as a diffable node.
  *
  * Equality is canonical-text equality, not raw-text equality. SurrealDB
@@ -30,7 +48,7 @@ export class SurrealDiffNode implements DiffableNode {
   }
 
   isEqualTo(other: DiffableNode): boolean {
-    if (!(other instanceof SurrealDiffNode)) return false;
+    if (!isSurrealDiffNode(other)) return false;
     if (other.nodeKind !== this.nodeKind || other.id !== this.id) return false;
     return canonicalizeDefinition(this.definition) === canonicalizeDefinition(other.definition);
   }

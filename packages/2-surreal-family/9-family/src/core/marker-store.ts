@@ -63,16 +63,30 @@ function optionalString(row: Record<string, unknown>, key: string): string | nul
  * wrapper under `cbor`; both render to the same text, so both are read the
  * same way.
  *
- * A row whose timestamp is unreadable is treated as epoch rather than
- * rejected: the marker's identity is its hashes, and refusing to read a
- * marker over a malformed timestamp would strand a database that is
- * otherwise fine.
+ * The control plane never omits or mis-writes this field itself — every
+ * caller of `writeMarkerRow` supplies it, and the DDL declares it non-optional.
+ * A row missing it or carrying a value that doesn't parse as a date was not
+ * produced by this store, so it throws naming the offending row/field rather
+ * than guessing epoch and masking the corruption.
  */
 function readDate(row: Record<string, unknown>, key: string): Date {
   const value = row[key];
-  if (value === null || value === undefined) return new Date(0);
+  if (value === null || value === undefined) {
+    throw structuredError(
+      'CONTRACT.MARKER_INVALID',
+      `SurrealDB control row is missing the date field '${key}'`,
+      { meta: { field: key } },
+    );
+  }
   const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
+  if (Number.isNaN(parsed.getTime())) {
+    throw structuredError(
+      'CONTRACT.MARKER_INVALID',
+      `SurrealDB control row has an unparseable value in date field '${key}'`,
+      { meta: { field: key, value: String(value) } },
+    );
+  }
+  return parsed;
 }
 
 function toMarker(row: Record<string, unknown>): ContractMarkerRecord {
@@ -96,19 +110,27 @@ function toMarker(row: Record<string, unknown>): ContractMarkerRecord {
  * Under `cbor` the id arrives structured, so the space is simply its id part.
  * Under `json` it is the text after the first colon, and SurrealDB brackets
  * an id that is not a bare identifier — `marker:⟨my app⟩` — so the brackets
- * come off.
+ * come off. An id shaped like neither a RecordId nor a colon-bearing string
+ * is not a marker this store wrote, so it throws naming the offending row
+ * rather than dropping it from the result silently.
  */
-function spaceOf(row: Record<string, unknown>): string | undefined {
+function spaceOf(row: Record<string, unknown>): string {
   const id = row['id'];
   if (isRecordId(id)) return String(id.id);
-  if (typeof id !== 'string') return undefined;
-  const separator = id.indexOf(':');
-  return separator === -1
-    ? undefined
-    : id
+  if (typeof id === 'string') {
+    const separator = id.indexOf(':');
+    if (separator !== -1) {
+      return id
         .slice(separator + 1)
         .replaceAll('⟨', '')
         .replaceAll('⟩', '');
+    }
+  }
+  throw structuredError(
+    'CONTRACT.MARKER_INVALID',
+    "SurrealDB control row has an unrecognised id shape in field 'id'",
+    { meta: { field: 'id', value: typeof id === 'string' ? id : typeof id } },
+  );
 }
 
 export async function readMarkerRow(
@@ -136,8 +158,7 @@ export async function readAllMarkerRows(
     for (const row of await rows(queryable, `SELECT * FROM \`${MARKER_TABLE}\``)) {
       const record = asRecord(row);
       if (record === undefined) continue;
-      const space = spaceOf(record);
-      if (space !== undefined) markers.set(space, toMarker(record));
+      markers.set(spaceOf(record), toMarker(record));
     }
   } catch (error) {
     if (!isMissingTable(error)) throw error;

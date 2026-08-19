@@ -8,6 +8,8 @@ import { structuredError } from '@internal/utils/structured-error';
  */
 const BARE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+const NUL = String.fromCharCode(0);
+
 /**
  * Quotes an identifier for SurrealQL.
  *
@@ -23,14 +25,17 @@ const BARE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * all. Inside backticks both `\` and `` ` `` escape, which covers every name.
  */
 export function quoteIdentifier(name: string): string {
-  if (name.includes('\u0000')) {
-    throw structuredError(
-      'RUNTIME.AST_UNSUPPORTED',
-      'SurrealQL identifiers cannot contain a NUL character',
-      { meta: { target: 'surrealdb' } },
-    );
-  }
-  return `\`${name.replaceAll('\\', '\\\\').replaceAll('`', '\\`')}\``;
+  // Escapes mirror what SurrealDB v3.2.4 itself renders back in `INFO FOR
+  // DB`/`INFO FOR TABLE` for these same characters, so a name round-trips to
+  // text this codebase's own schema diffing recognizes as identical rather
+  // than merely equivalent.
+  return `\`${name
+    .replaceAll('\\', '\\\\')
+    .replaceAll('`', '\\`')
+    .replaceAll(NUL, '\\0')
+    .replaceAll('\t', '\\t')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')}\``;
 }
 
 /** True when `name` would parse unquoted. Used by diagnostics, not by rendering. */
@@ -47,6 +52,17 @@ export function isBareIdentifier(name: string): boolean {
  * free of user data.
  */
 export function escapeStringLiteral(value: string): string {
+  // Unlike an identifier, this text is always contract-owned (a literal type
+  // member, a diagnostic) — a NUL here is corruption, not a name SurrealDB
+  // merely renders unusually, so it is rejected rather than escaped, matching
+  // quoteIdentifier's posture instead of leaving it to pass through raw.
+  if (value.includes(NUL)) {
+    throw structuredError(
+      'RUNTIME.AST_UNSUPPORTED',
+      'SurrealQL string literals cannot contain a NUL character',
+      { meta: { target: 'surrealdb' } },
+    );
+  }
   const escaped = value
     .replaceAll('\\', '\\\\')
     .replaceAll("'", "\\'")
