@@ -87,6 +87,7 @@
     "./orm": "./dist/orm.mjs",
     "./query-ast": "./dist/query-ast.mjs",
     "./query-ast/plan": "./dist/query-ast__plan.mjs",
+    "./query-builder": "./dist/query-builder.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./schema-ir": "./dist/schema-ir.mjs",
     "./target/codec-ids": "./dist/target__codec-ids.mjs",

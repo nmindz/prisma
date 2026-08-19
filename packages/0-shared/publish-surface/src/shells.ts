@@ -271,6 +271,7 @@ const SQL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
 const SURREAL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
   { package: '@internal/surreal-contract-ts', entry: 'contract-ts' },
   { package: '@internal/surreal-orm', entry: 'orm' },
+  { package: '@internal/surreal-query-builder', entry: 'query-builder' },
   { package: '@internal/surreal-query-ast', entry: 'query-ast' },
   { package: '@internal/surreal-lowering', entry: 'lowering' },
   { package: '@internal/surreal-cbor', entry: 'cbor' },
@@ -536,6 +537,11 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           dir: 'packages/2-surreal-family/5-query-builders/orm',
           name: '@internal/surreal-orm',
           entry: 'orm',
+        },
+        {
+          dir: 'packages/2-surreal-family/5-query-builders/query-builder',
+          name: '@internal/surreal-query-builder',
+          entry: 'query-builder',
         },
         {
           dir: 'packages/2-surreal-family/6-transport/surreal-cbor',
