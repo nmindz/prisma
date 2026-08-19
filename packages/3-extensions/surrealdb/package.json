@@ -63,6 +63,7 @@
     "./contract-builder": "./dist/contract-builder.mjs",
     "./control": "./dist/control.mjs",
     "./runtime": "./dist/runtime.mjs",
+    "./static": "./dist/static.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

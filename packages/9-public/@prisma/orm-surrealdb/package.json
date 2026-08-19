@@ -90,6 +90,7 @@
     "./query-builder": "./dist/query-builder.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./schema-ir": "./dist/schema-ir.mjs",
+    "./static": "./dist/static.mjs",
     "./target/codec-ids": "./dist/target__codec-ids.mjs",
     "./target/codecs": "./dist/target__codecs.mjs",
     "./target/contract": "./dist/target__contract.mjs",

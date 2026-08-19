@@ -6,5 +6,6 @@ export default defineConfig({
     'contract-builder': 'src/exports/contract-builder.ts',
     control: 'src/exports/control.ts',
     runtime: 'src/exports/runtime.ts',
+    static: 'src/exports/static.ts',
   },
 });

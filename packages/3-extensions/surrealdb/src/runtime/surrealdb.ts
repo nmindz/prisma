@@ -1,4 +1,3 @@
-import { assembleSurrealCodecLookup } from '@internal/adapter-surrealdb/codec-lookup';
 import surrealAdapter from '@internal/adapter-surrealdb/runtime';
 import type { Contract } from '@internal/contract/types';
 import type { SurrealBinding, SurrealWireProtocol } from '@internal/driver-surrealdb/runtime';
@@ -16,7 +15,7 @@ import type {
   SurrealTransaction,
 } from '@internal/surreal-lowering';
 import { lowerQuery } from '@internal/surreal-lowering';
-import { orm as buildOrm, type SurrealOrm } from '@internal/surreal-orm';
+import type { SurrealOrm } from '@internal/surreal-orm';
 import type { SurrealQueryPlan } from '@internal/surreal-query-ast/plan';
 import type {
   SurrealExecutionContext,
@@ -30,8 +29,9 @@ import { SurrealContractSerializer } from '@internal/target-surrealdb/contract';
 import surrealTarget from '@internal/target-surrealdb/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
+import { buildSurrealContext } from '../context/build-context';
 import { surrealdbError } from '../errors';
-import { createRawLane, type RawLane } from './raw-lane';
+import type { RawLane } from './raw-lane';
 
 export type SurrealdbTargetId = 'surrealdb';
 
@@ -246,14 +246,7 @@ export default function surrealdb<TContract extends Contract<SurrealStorageShape
     extensions: options.extensions ?? [],
   });
 
-  const context: SurrealExecutionContext<TContract> = {
-    contract,
-    stack,
-    codecs: assembleSurrealCodecLookup([stack.target, stack.adapter, ...stack.extensions]),
-  };
-
-  const surql = createRawLane<TContract>({ contract });
-  const collections = buildOrm<TContract>(contract);
+  const { context, orm: collections, surql } = buildSurrealContext<TContract>(contract, stack);
 
   let runtimeInstance: SurrealRuntime | undefined;
   let driverInstance: ReturnType<typeof surrealDriver.create> | undefined;
