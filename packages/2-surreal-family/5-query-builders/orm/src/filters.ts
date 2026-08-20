@@ -1,5 +1,5 @@
 import type { SurrealField } from '@internal/surreal-contract';
-import { unwrapOptional } from '@internal/surreal-contract';
+import { renderSurrealType, unwrapOptional } from '@internal/surreal-contract';
 import type { SurrealFieldType } from '@internal/surreal-contract/types';
 import type { SurrealExpr } from '@internal/surreal-query-ast';
 import { and, binary, field, fn, isNone, lit, not, or, param } from '@internal/surreal-query-ast';
@@ -24,10 +24,21 @@ export interface FieldFilter {
   readonly notIn?: readonly unknown[];
   /** `CONTAINS` — the field is an array holding this value. */
   readonly contains?: unknown;
+  /** `string::starts_with(field, ...)` — the field is a string. */
+  readonly startsWith?: string;
+  /** `string::ends_with(field, ...)` — the field is a string. */
+  readonly endsWith?: string;
   /** `INSIDE` — this field's value is a member of the given array. */
   readonly inside?: readonly unknown[];
   /** `IS NONE` when true, `IS NOT NONE` when false. */
   readonly isNone?: boolean;
+  /**
+   * Folds both sides of `equals`, `contains`, `startsWith`, and `endsWith`
+   * through `string::lowercase(...)`. The bound parameter keeps its original
+   * value — only the placeholder is wrapped — so the fold happens once,
+   * server-side.
+   */
+  readonly mode?: 'insensitive';
 }
 
 export type WhereValue = FieldFilter | unknown;
@@ -49,7 +60,7 @@ const COMBINATORS = new Set(['AND', 'OR', 'NOT']);
  * only in key order produce the same SurrealQL, which is what lets a content
  * hash over a plan be a usable cache key.
  */
-const FIELD_FILTER_OPERATORS: readonly (keyof FieldFilter)[] = [
+const FIELD_FILTER_OPERATORS: readonly Exclude<keyof FieldFilter, 'mode'>[] = [
   'equals',
   'not',
   'gt',
@@ -59,11 +70,24 @@ const FIELD_FILTER_OPERATORS: readonly (keyof FieldFilter)[] = [
   'in',
   'notIn',
   'contains',
+  'startsWith',
+  'endsWith',
   'inside',
   'isNone',
 ];
 
-const FIELD_FILTER_OPERATOR_NAMES: ReadonlySet<string> = new Set(FIELD_FILTER_OPERATORS);
+/** Operators whose declared field must be a string. */
+const STRING_ONLY_OPERATORS: ReadonlySet<keyof FieldFilter> = new Set(['startsWith', 'endsWith']);
+
+/** Operators `mode: 'insensitive'` folds through `string::lowercase(...)`. */
+const CASE_FOLDABLE_OPERATORS: ReadonlySet<keyof FieldFilter> = new Set([
+  'equals',
+  'contains',
+  'startsWith',
+  'endsWith',
+]);
+
+const FIELD_FILTER_KEYS: ReadonlySet<string> = new Set([...FIELD_FILTER_OPERATORS, 'mode']);
 
 /** Allocates stable `$p0`, `$p1`, … names across one compiled statement. */
 export class ParamAllocator {
@@ -80,19 +104,59 @@ function isFieldFilter(value: unknown): value is FieldFilter {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const keys = Object.keys(value);
   if (keys.length === 0) return false;
-  return keys.every((key) => FIELD_FILTER_OPERATOR_NAMES.has(key));
+  return keys.every((key) => FIELD_FILTER_KEYS.has(key));
+}
+
+/** Wraps an expression in `string::lowercase(...)` for case-insensitive folding. */
+function lowerOf(expr: SurrealExpr): SurrealExpr {
+  return fn('string::lowercase', expr);
+}
+
+function isStringFieldType(type: SurrealFieldType): boolean {
+  const resolved = unwrapOptional(type);
+  return resolved.kind === 'scalar' && resolved.name === 'string';
+}
+
+/**
+ * Guards a string-only operator against the field's declared type.
+ *
+ * A no-op when `fields` is unavailable (an untyped, open-map contract) or
+ * when `path` names no declared field — which also covers a dotted
+ * relation-leaf path, since this table's field list only describes the
+ * first hop.
+ */
+function assertStringOperandField(
+  path: string,
+  operator: string,
+  fields: ReadonlyArray<SurrealField> | undefined,
+): void {
+  const declared = fields?.find((candidate) => candidate.name === path);
+  if (declared === undefined || isStringFieldType(declared.type)) return;
+  const typeText = renderSurrealType(declared.type);
+  throw structuredError(
+    'RUNTIME.FILTER_FIELD_TYPE_NOT_STRING',
+    `where clause cannot use "${operator}" on field "${path}" (type ${typeText}): ${operator} requires a string field`,
+    { meta: { field: path, operator, fieldType: typeText } },
+  );
 }
 
 function comparison(
   path: string,
-  operator: keyof FieldFilter,
+  operator: Exclude<keyof FieldFilter, 'mode'>,
   operand: unknown,
   params: ParamAllocator,
+  insensitive: boolean,
 ): SurrealExpr {
   const left = field(path);
+  const foldCase = insensitive && CASE_FOLDABLE_OPERATORS.has(operator);
+  const compareLeft = foldCase ? lowerOf(left) : left;
+  const compareRight = (): SurrealExpr => {
+    const bound = params.bind(operand);
+    return foldCase ? lowerOf(bound) : bound;
+  };
   switch (operator) {
     case 'equals':
-      return binary('=', left, params.bind(operand));
+      return binary('=', compareLeft, compareRight());
     case 'not':
       return binary('!=', left, params.bind(operand));
     case 'gt':
@@ -108,7 +172,11 @@ function comparison(
     case 'notIn':
       return not(binary('INSIDE', left, params.bind(operand)));
     case 'contains':
-      return binary('CONTAINS', left, params.bind(operand));
+      return binary('CONTAINS', compareLeft, compareRight());
+    case 'startsWith':
+      return fn('string::starts_with', compareLeft, compareRight());
+    case 'endsWith':
+      return fn('string::ends_with', compareLeft, compareRight());
     case 'inside':
       return binary('INSIDE', left, params.bind(operand));
     case 'isNone':
@@ -172,11 +240,11 @@ export function compileWhere(
 
     const relation = fields === undefined ? undefined : classifyRelationField(key, fields);
     if (relation !== undefined) {
-      terms.push(...compileRelationField(key, relation, value, params));
+      terms.push(...compileRelationField(key, relation, value, params, fields));
       continue;
     }
 
-    terms.push(...compileFieldTerms(key, value, params));
+    terms.push(...compileFieldTerms(key, value, params, fields));
   }
 
   if (terms.length === 0) return undefined;
@@ -224,6 +292,7 @@ function compileRelationField(
   relation: RelationFieldKind,
   value: unknown,
   params: ParamAllocator,
+  fields: ReadonlyArray<SurrealField> | undefined,
 ): readonly SurrealExpr[] {
   if (!isWhereInput(value)) {
     throw structuredError(
@@ -232,8 +301,8 @@ function compileRelationField(
       { meta: { field: key, relation } },
     );
   }
-  if (isFieldFilter(value)) return compileFieldTerms(key, value, params);
-  if (relation === 'to-one') return compileRelationTerms(key, value, params);
+  if (isFieldFilter(value)) return compileFieldTerms(key, value, params, fields);
+  if (relation === 'to-one') return compileRelationTerms(key, value, params, fields);
   return [compileQuantifier(key, value, params)];
 }
 
@@ -249,20 +318,21 @@ function compileRelationTerms(
   basePath: string,
   where: WhereInput,
   params: ParamAllocator,
+  fields: ReadonlyArray<SurrealField> | undefined,
 ): readonly SurrealExpr[] {
   const terms: SurrealExpr[] = [];
   for (const [key, value] of Object.entries(where)) {
     if (value === undefined) continue;
     if (key === 'NOT' || key === 'AND' || key === 'OR') {
-      const combined = compileRelationCombinator(basePath, key, value, params);
+      const combined = compileRelationCombinator(basePath, key, value, params, fields);
       if (combined !== undefined) terms.push(combined);
       continue;
     }
     const path = `${basePath}.${key}`;
     if (isWhereInput(value) && !isFieldFilter(value)) {
-      terms.push(...compileRelationTerms(path, value, params));
+      terms.push(...compileRelationTerms(path, value, params, fields));
     } else {
-      terms.push(...compileFieldTerms(path, value, params));
+      terms.push(...compileFieldTerms(path, value, params, fields));
     }
   }
   return terms;
@@ -274,9 +344,10 @@ function compileRelationCombinator(
   key: string,
   value: unknown,
   params: ParamAllocator,
+  fields: ReadonlyArray<SurrealField> | undefined,
 ): SurrealExpr | undefined {
   const toPredicate = (entry: WhereInput): SurrealExpr | undefined => {
-    const nested = compileRelationTerms(basePath, entry, params);
+    const nested = compileRelationTerms(basePath, entry, params, fields);
     if (nested.length === 0) return undefined;
     return nested.length === 1 ? nested[0] : and(...nested);
   };
@@ -378,16 +449,20 @@ function compileFieldTerms(
   path: string,
   value: unknown,
   params: ParamAllocator,
+  fields: ReadonlyArray<SurrealField> | undefined,
 ): readonly SurrealExpr[] {
   if (!isFieldFilter(value)) {
     // A bare value is shorthand for `equals`.
     return [binary('=', field(path), params.bind(value))];
   }
+  if (value.mode !== undefined) assertStringOperandField(path, 'mode', fields);
+  const insensitive = value.mode === 'insensitive';
   const terms: SurrealExpr[] = [];
   for (const operator of FIELD_FILTER_OPERATORS) {
     const operand = value[operator];
     if (operand === undefined) continue;
-    terms.push(comparison(path, operator, operand, params));
+    if (STRING_ONLY_OPERATORS.has(operator)) assertStringOperandField(path, operator, fields);
+    terms.push(comparison(path, operator, operand, params, insensitive));
   }
   return terms;
 }

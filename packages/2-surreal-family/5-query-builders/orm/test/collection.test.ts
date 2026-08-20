@@ -126,6 +126,128 @@ describe('findMany', () => {
   });
 });
 
+describe('string filter operators', () => {
+  const typed = new SurrealCollection('metric', 'sh', undefined, undefined, metricFields);
+
+  it('maps startsWith to string::starts_with', () => {
+    const lowered = surql(typed.findMany({ where: { label: { startsWith: 'He' } } }));
+    expect(lowered.surql).toBe('SELECT * FROM `metric` WHERE string::starts_with(`label`, $p0)');
+    expect(lowered.params).toEqual([{ name: 'p0', value: 'He' }]);
+  });
+
+  it('maps endsWith to string::ends_with', () => {
+    expect(surql(typed.findMany({ where: { label: { endsWith: 'lo' } } })).surql).toBe(
+      'SELECT * FROM `metric` WHERE string::ends_with(`label`, $p0)',
+    );
+  });
+
+  it('folds equals under insensitive mode, lowering both sides', () => {
+    const lowered = surql(
+      typed.findMany({ where: { label: { equals: 'HELLO', mode: 'insensitive' } } }),
+    );
+    expect(lowered.surql).toBe(
+      'SELECT * FROM `metric` WHERE string::lowercase(`label`) = string::lowercase($p0)',
+    );
+    expect(lowered.params).toEqual([{ name: 'p0', value: 'HELLO' }]);
+  });
+
+  it('folds contains under insensitive mode', () => {
+    expect(
+      surql(typed.findMany({ where: { label: { contains: 'LO', mode: 'insensitive' } } })).surql,
+    ).toBe(
+      'SELECT * FROM `metric` WHERE string::lowercase(`label`) CONTAINS string::lowercase($p0)',
+    );
+  });
+
+  it('folds startsWith under insensitive mode', () => {
+    expect(
+      surql(typed.findMany({ where: { label: { startsWith: 'he', mode: 'insensitive' } } })).surql,
+    ).toBe(
+      'SELECT * FROM `metric` WHERE string::starts_with(string::lowercase(`label`), string::lowercase($p0))',
+    );
+  });
+
+  it('folds endsWith under insensitive mode', () => {
+    expect(
+      surql(typed.findMany({ where: { label: { endsWith: 'LO', mode: 'insensitive' } } })).surql,
+    ).toBe(
+      'SELECT * FROM `metric` WHERE string::ends_with(string::lowercase(`label`), string::lowercase($p0))',
+    );
+  });
+
+  it('keeps the bound parameter verbatim under insensitive mode, lowering server-side', () => {
+    const lowered = surql(
+      typed.findMany({ where: { label: { startsWith: 'HE', mode: 'insensitive' } } }),
+    );
+    expect(lowered.params).toEqual([{ name: 'p0', value: 'HE' }]);
+  });
+
+  it('leaves non-foldable operators unaffected by insensitive mode', () => {
+    expect(surql(typed.findMany({ where: { score: { gt: 1 } } })).surql).toBe(
+      'SELECT * FROM `metric` WHERE `score` > $p0',
+    );
+  });
+
+  it('composes with AND across fields', () => {
+    expect(
+      surql(typed.findMany({ where: { label: { startsWith: 'a' }, unit: { endsWith: 'z' } } }))
+        .surql,
+    ).toBe(
+      'SELECT * FROM `metric` WHERE (string::starts_with(`label`, $p0) AND string::ends_with(`unit`, $p1))',
+    );
+  });
+
+  it('composes with OR', () => {
+    expect(
+      surql(
+        typed.findMany({
+          where: { OR: [{ label: { startsWith: 'a' } }, { label: { endsWith: 'z' } }] },
+        }),
+      ).surql,
+    ).toBe(
+      'SELECT * FROM `metric` WHERE (string::starts_with(`label`, $p0) OR string::ends_with(`label`, $p1))',
+    );
+  });
+
+  it('composes with NOT', () => {
+    expect(surql(typed.findMany({ where: { NOT: { label: { startsWith: 'a' } } } })).surql).toBe(
+      'SELECT * FROM `metric` WHERE !(string::starts_with(`label`, $p0))',
+    );
+  });
+
+  it('rejects startsWith on a non-string field', () => {
+    expect(() => typed.findMany({ where: { score: { startsWith: '1' } } })).toThrow(
+      'where clause cannot use "startsWith" on field "score" (type int): startsWith requires a string field',
+    );
+  });
+
+  it('rejects endsWith on a non-string field', () => {
+    expect(() => typed.findMany({ where: { active: { endsWith: 'x' } } })).toThrow(
+      'where clause cannot use "endsWith" on field "active" (type bool): endsWith requires a string field',
+    );
+  });
+
+  it('rejects mode on a non-string field', () => {
+    expect(() => typed.findMany({ where: { score: { equals: 1, mode: 'insensitive' } } })).toThrow(
+      'where clause cannot use "mode" on field "score" (type int): mode requires a string field',
+    );
+  });
+
+  it('allows startsWith when the field is not declared on the table', () => {
+    expect(surql(typed.findMany({ where: { unknownField: { startsWith: 'a' } } })).surql).toBe(
+      'SELECT * FROM `metric` WHERE string::starts_with(`unknownField`, $p0)',
+    );
+  });
+
+  it('allows startsWith and insensitive mode when the collection carries no field types at all', () => {
+    expect(
+      surql(person.findMany({ where: { name: { startsWith: 'a', mode: 'insensitive' } } })).surql,
+    ).toBe(
+      'SELECT * FROM `person` WHERE string::starts_with(string::lowercase(`name`), string::lowercase($p0))',
+    );
+  });
+});
+
 describe('count', () => {
   it('aggregates with GROUP ALL', () => {
     expect(surql(person.count()).surql).toBe('SELECT count() AS `count` FROM `person` GROUP ALL');
@@ -683,6 +805,30 @@ describe('relation filters', () => {
     it('rejects a non-object value for a known relation', () => {
       expect(() => post.findMany({ where: { author: 'ada' } })).toThrow(
         /relation "author" must be an object/,
+      );
+    });
+  });
+
+  describe('string operators at relation leaves', () => {
+    it('applies startsWith at a to-one relation leaf', () => {
+      expect(
+        surql(post.findMany({ where: { author: { name: { startsWith: 'ad' } } } })).surql,
+      ).toBe('SELECT * FROM `post` WHERE string::starts_with(`author`.`name`, $p0)');
+    });
+
+    it('folds case at a to-one relation leaf under insensitive mode', () => {
+      expect(
+        surql(
+          post.findMany({ where: { author: { name: { equals: 'ADA', mode: 'insensitive' } } } }),
+        ).surql,
+      ).toBe(
+        'SELECT * FROM `post` WHERE string::lowercase(`author`.`name`) = string::lowercase($p0)',
+      );
+    });
+
+    it('rejects startsWith directly against a relation field, which is not a string', () => {
+      expect(() => post.findMany({ where: { author: { startsWith: 'a' } } })).toThrow(
+        'where clause cannot use "startsWith" on field "author" (type option<record<`person`>>): startsWith requires a string field',
       );
     });
   });

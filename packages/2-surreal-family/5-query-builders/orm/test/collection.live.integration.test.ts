@@ -448,6 +448,116 @@ describe.skipIf(!available)('relation filters against a live SurrealDB', () => {
   });
 });
 
+describe.skipIf(!available)('string filter operators against a live SurrealDB', () => {
+  const driver = new SurrealDriverImpl();
+
+  async function run<Row>(plan: SurrealQueryPlan<Row>): Promise<Row[]> {
+    const lowered = lowerQuery(plan.query);
+    const vars = Object.fromEntries(lowered.params.map((p) => [p.name, p.value]));
+    const rows: Row[] = [];
+    for await (const row of driver.query<Row>({
+      surql: lowered.surql,
+      vars,
+      ...(plan.resultIndex === undefined ? {} : { resultIndex: plan.resultIndex }),
+    })) {
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  async function exec(surql: string): Promise<void> {
+    for await (const _row of driver.query({ surql })) {
+      // DDL — nothing to collect.
+    }
+  }
+
+  const wordFields: ReadonlyArray<SurrealField> = [
+    new SurrealField({
+      name: 'label',
+      type: { kind: 'scalar', name: 'string' },
+      codecId: 'string',
+    }),
+  ];
+  const word = new SurrealCollection<{ id: unknown; label: string }>(
+    'word_typed',
+    'sh',
+    undefined,
+    undefined,
+    wordFields,
+  );
+
+  beforeAll(async () => {
+    await driver.connect(binding);
+    await exec('REMOVE TABLE IF EXISTS `word_typed`');
+    await run(word.create({ data: { label: 'Hello' } }));
+    await run(word.create({ data: { label: 'HELLO' } }));
+    await run(word.create({ data: { label: 'hello' } }));
+    await run(word.create({ data: { label: 'Ábaco' } }));
+    await run(word.create({ data: { label: 'cathedral' } }));
+  });
+
+  afterAll(async () => {
+    await driver.close();
+  });
+
+  function labelsOf(rows: ReadonlyArray<{ label: string }>): string[] {
+    return rows.map((row) => row.label).sort();
+  }
+
+  it('startsWith matches case-sensitively by default', async () => {
+    const rows = await run(word.findMany({ where: { label: { startsWith: 'He' } } }));
+    expect(labelsOf(rows)).toEqual(['Hello']);
+  });
+
+  it('startsWith folds case on both sides in insensitive mode', async () => {
+    const rows = await run(
+      word.findMany({ where: { label: { startsWith: 'he', mode: 'insensitive' } } }),
+    );
+    expect(labelsOf(rows)).toEqual(['HELLO', 'Hello', 'hello']);
+  });
+
+  it('startsWith insensitive folds a non-ASCII prefix', async () => {
+    const rows = await run(
+      word.findMany({ where: { label: { startsWith: 'Á', mode: 'insensitive' } } }),
+    );
+    expect(labelsOf(rows)).toEqual(['Ábaco']);
+
+    const sensitive = await run(word.findMany({ where: { label: { startsWith: 'á' } } }));
+    expect(labelsOf(sensitive)).toEqual([]);
+  });
+
+  it('endsWith matches case-sensitively by default', async () => {
+    const rows = await run(word.findMany({ where: { label: { endsWith: 'lo' } } }));
+    expect(labelsOf(rows)).toEqual(['Hello', 'hello']);
+  });
+
+  it('endsWith folds case on both sides in insensitive mode', async () => {
+    const rows = await run(
+      word.findMany({ where: { label: { endsWith: 'LO', mode: 'insensitive' } } }),
+    );
+    expect(labelsOf(rows)).toEqual(['HELLO', 'Hello', 'hello']);
+  });
+
+  it('contains matches case-sensitively by default', async () => {
+    const rows = await run(word.findMany({ where: { label: { contains: 'ell' } } }));
+    expect(labelsOf(rows)).toEqual(['Hello', 'hello']);
+  });
+
+  it('contains folds case on both sides in insensitive mode', async () => {
+    const rows = await run(
+      word.findMany({ where: { label: { contains: 'ELL', mode: 'insensitive' } } }),
+    );
+    expect(labelsOf(rows)).toEqual(['HELLO', 'Hello', 'hello']);
+  });
+
+  it('equals folds case on both sides in insensitive mode', async () => {
+    const rows = await run(
+      word.findMany({ where: { label: { equals: 'HELLO', mode: 'insensitive' } } }),
+    );
+    expect(labelsOf(rows)).toEqual(['HELLO', 'Hello', 'hello']);
+  });
+});
+
 describe.skipIf(available)('SurrealDB orm collection-lane suite', () => {
   it('is skipped because SurrealDB is not reachable', () => {
     expect(available).toBe(false);
