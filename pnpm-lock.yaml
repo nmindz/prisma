@@ -3456,6 +3456,9 @@ importers:
       '@internal/surreal-contract':
         specifier: workspace:8.0.0-rc.14
         version: link:../1-foundation/surreal-contract
+      '@internal/surreal-errors':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../1-foundation/surreal-errors
       '@internal/surreal-lowering':
         specifier: workspace:8.0.0-rc.14
         version: link:../6-transport/surreal-lowering

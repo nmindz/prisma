@@ -159,6 +159,52 @@ describe.skipIf(!available)('surrealdb() against a live server', () => {
     });
     expect(seen).toEqual([{ name: 'dee' }]);
   });
+
+  describe('reads against a table that does not exist', () => {
+    // Declared in the contract (support/contract.ts) but never defined on
+    // the server, so every read against it hits SurrealDB's table-not-found
+    // error rather than returning rows.
+    const ghost = db.orm['ghost'] as NonNullable<(typeof db.orm)['ghost']>;
+    const person = db.orm['person'] as NonNullable<(typeof db.orm)['person']>;
+
+    beforeAll(async () => {
+      await db.execute(db.surql`REMOVE TABLE IF EXISTS ghost`);
+    });
+
+    it('resolves findMany to no rows', async () => {
+      expect(await rows(ghost.findMany({}))).toEqual([]);
+    });
+
+    it('resolves findUnique to no rows', async () => {
+      expect(await rows(ghost.findUnique('missing'))).toEqual([]);
+    });
+
+    it('resolves count to no rows', async () => {
+      expect(await rows(ghost.count({}))).toEqual([]);
+    });
+
+    it('resolves groupBy to no rows', async () => {
+      expect(await rows(ghost.groupBy({ aggregate: { n: { fn: 'count' } } }))).toEqual([]);
+    });
+
+    it('still throws for a write', async () => {
+      await expect(
+        db.execute(ghost.update({ id: 'missing', data: { name: 'x' }, merge: true })),
+      ).rejects.toThrow("table 'ghost' does not exist");
+    });
+
+    it('runs the surviving write when a batch also reads a missing table', async () => {
+      const [found, created] = await db.batch([
+        ghost.findMany({}),
+        person.create({ id: 'batch3', data: { name: 'batch3', age: 3 } }),
+      ]);
+      expect(found).toEqual([]);
+      expect(created).toEqual([{ id: new RecordId('person', 'batch3'), name: 'batch3', age: 3 }]);
+      expect(await rows(person.findUnique('batch3'))).toEqual([
+        { id: new RecordId('person', 'batch3'), name: 'batch3', age: 3 },
+      ]);
+    });
+  });
 });
 
 describe.skipIf(available)('surrealdb() live suite', () => {

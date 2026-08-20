@@ -40,6 +40,7 @@ function envelopeError(envelope: SurrealResultEnvelope, statementIndex: number):
     statementIndex,
     ...(classified.index === undefined ? {} : { index: classified.index }),
     ...(classified.field === undefined ? {} : { field: classified.field }),
+    ...(classified.table === undefined ? {} : { table: classified.table }),
     ...(envelope.kind === undefined ? {} : { surrealKind: envelope.kind }),
   });
 }
@@ -146,6 +147,7 @@ export class SurrealBatchQueryError extends SurrealQueryError {
       ...(source.surrealKind === undefined ? {} : { surrealKind: source.surrealKind }),
       ...(source.index === undefined ? {} : { index: source.index }),
       ...(source.field === undefined ? {} : { field: source.field }),
+      ...(source.table === undefined ? {} : { table: source.table }),
       ...(source.statementIndex === undefined ? {} : { statementIndex: source.statementIndex }),
     });
     this.name = 'SurrealBatchQueryError';

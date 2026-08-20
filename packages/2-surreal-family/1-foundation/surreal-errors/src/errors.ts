@@ -23,6 +23,8 @@ export class SurrealQueryError extends Error implements SurrealDriverError<'surr
   readonly index: string | undefined;
   /** The field a coercion failure names, when there is one. */
   readonly field: string | undefined;
+  /** The table a table-not-found failure names, when there is one. */
+  readonly table: string | undefined;
   /** Index of the failing statement within a multi-statement query. */
   readonly statementIndex: number | undefined;
 
@@ -34,6 +36,7 @@ export class SurrealQueryError extends Error implements SurrealDriverError<'surr
       readonly surrealKind?: string;
       readonly index?: string;
       readonly field?: string;
+      readonly table?: string;
       readonly statementIndex?: number;
     },
   ) {
@@ -43,6 +46,7 @@ export class SurrealQueryError extends Error implements SurrealDriverError<'surr
     this.surrealKind = options?.surrealKind;
     this.index = options?.index;
     this.field = options?.field;
+    this.table = options?.table;
     this.statementIndex = options?.statementIndex;
   }
 
@@ -68,6 +72,7 @@ export type SurrealFailureClass =
   | 'type-coercion'
   | 'parse'
   | 'permission'
+  | 'table-not-found'
   | 'unknown';
 
 /** Connection-level failure: the socket, the handshake, or authentication. */
@@ -100,4 +105,9 @@ export class SurrealConnectionError
 
 export function isUniqueConstraintViolation(error: unknown): boolean {
   return SurrealQueryError.is(error) && error.failure === 'unique-violation';
+}
+
+/** Whether an error is a read against a table that does not exist. */
+export function isTableNotFound(error: unknown): boolean {
+  return SurrealQueryError.is(error) && error.failure === 'table-not-found';
 }

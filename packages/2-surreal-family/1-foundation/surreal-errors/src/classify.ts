@@ -20,8 +20,18 @@ const PATTERNS: readonly {
   readonly failure: SurrealFailureClass;
   readonly pattern: RegExp;
   /** The capture group naming the offending object, when the message has one. */
-  readonly capture?: 'index' | 'field';
+  readonly capture?: 'index' | 'field' | 'table';
 }[] = [
+  {
+    // "The table 'nope' does not exist"
+    //
+    // Quoted with straight single quotes, not backticks — every other
+    // pattern's capture is backtick-quoted, so an echoed value crafted to
+    // close a backtick-quote early cannot also close this one.
+    failure: 'table-not-found',
+    pattern: /^The table '([^']+)' does not exist/i,
+    capture: 'table',
+  },
   {
     // "Database index `person_name_uq` already contains 'ada', with record `person:1k9…`"
     failure: 'unique-violation',
@@ -71,6 +81,7 @@ export interface ClassifiedFailure {
   readonly failure: SurrealFailureClass;
   readonly index?: string;
   readonly field?: string;
+  readonly table?: string;
 }
 
 /** Classifies a SurrealDB error message into an actionable failure class. */
@@ -84,6 +95,9 @@ export function classifySurrealFailure(message: string): ClassifiedFailure {
     }
     if (entry.capture === 'field' && captured !== undefined) {
       return { failure: entry.failure, field: captured };
+    }
+    if (entry.capture === 'table' && captured !== undefined) {
+      return { failure: entry.failure, table: captured };
     }
     return { failure: entry.failure };
   }

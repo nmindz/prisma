@@ -30,6 +30,18 @@ export function testContractJson(): unknown {
                   },
                 ],
               },
+              // Declared in the contract but never defined on the server —
+              // reads against it exercise the table-not-found path.
+              ghost: {
+                schemafull: true,
+                fields: [
+                  {
+                    name: 'name',
+                    type: { kind: 'scalar', name: 'string' },
+                    codecId: 'surrealdb/string@1',
+                  },
+                ],
+              },
             },
           },
         },

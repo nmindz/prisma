@@ -21,6 +21,7 @@
     "@internal/framework-components": "workspace:8.0.0-rc.14",
     "@internal/surreal-codec": "workspace:8.0.0-rc.14",
     "@internal/surreal-contract": "workspace:8.0.0-rc.14",
+    "@internal/surreal-errors": "workspace:8.0.0-rc.14",
     "@internal/surreal-lowering": "workspace:8.0.0-rc.14",
     "@internal/surreal-query-ast": "workspace:8.0.0-rc.14",
     "@internal/surreal-value": "workspace:8.0.0-rc.14",

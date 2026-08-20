@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifySurrealFailure,
+  isTableNotFound,
   isUniqueConstraintViolation,
   SurrealConnectionError,
   SurrealQueryError,
 } from '../src/exports/index';
 
 describe('classifySurrealFailure', () => {
+  it('names the table behind a table-not-found failure', () => {
+    expect(classifySurrealFailure("The table 'nope' does not exist")).toEqual({
+      failure: 'table-not-found',
+      table: 'nope',
+    });
+  });
+
   it('names the index behind a uniqueness violation', () => {
     expect(
       classifySurrealFailure(
@@ -120,6 +128,22 @@ describe('classifySurrealFailure', () => {
       ).toEqual({ failure: 'type-coercion', field: 'notes' });
     });
 
+    it('classifies a coercion failure as type-coercion even when the echoed value contains the table-not-found phrase', () => {
+      expect(
+        classifySurrealFailure(
+          "Couldn't coerce value for field `bio` of `person:1`: Expected `int` but found `'The table \\'ghost\\' does not exist'`",
+        ),
+      ).toEqual({ failure: 'type-coercion', field: 'bio' });
+    });
+
+    it('classifies a uniqueness violation as unique-violation even when the duplicate value contains the table-not-found phrase', () => {
+      expect(
+        classifySurrealFailure(
+          "Database index `person_name_uq` already contains 'The table \\'ghost\\' does not exist', with record `person:1`",
+        ),
+      ).toEqual({ failure: 'unique-violation', index: 'person_name_uq' });
+    });
+
     it('does not classify a message merely containing the retired "not allowed to" phrase as permission', () => {
       expect(
         classifySurrealFailure(
@@ -144,6 +168,17 @@ describe('SurrealQueryError', () => {
 
   it('defaults an unclassified failure to unknown', () => {
     expect(new SurrealQueryError('boom').failure).toBe('unknown');
+  });
+
+  it('classifies a table-not-found failure for callers that map reads to empty', () => {
+    const error = new SurrealQueryError('boom', { failure: 'table-not-found', table: 'ghost' });
+    expect(isTableNotFound(error)).toBe(true);
+    expect(error.table).toBe('ghost');
+  });
+
+  it('does not classify an unrelated failure as table-not-found', () => {
+    expect(isTableNotFound(new SurrealQueryError('boom'))).toBe(false);
+    expect(isTableNotFound(new Error('boom'))).toBe(false);
   });
 });
 
