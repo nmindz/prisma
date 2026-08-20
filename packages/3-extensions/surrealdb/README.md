@@ -9,6 +9,8 @@ The user-facing SurrealDB client: `surrealdb({ ... })`.
 - `createRawLane` — the `surql` tagged template.
 - `db.transaction(fn)` — an interactive transaction, committed on return and
   rolled back if the body throws.
+- `surrealdbStatic(options)` — the same `context`/`orm`/`surql` surface,
+  built without a connection.
 
 ## Usage
 
@@ -65,6 +67,29 @@ A contract passed as an object still goes through the serializer, so a
 hand-built contract and one loaded from `contract.json` reach the runtime as
 the same hydrated IR — and a hand-built contract that would not survive the
 round trip fails at construction rather than at the first query.
+
+## A context without a connection
+
+`surrealdbStatic({ contractJson })` returns the same `context`, `orm`, and
+`surql` surface as `surrealdb(options)`, but without a URL, credentials, or a
+driver: it assembles the execution stack with the target and adapter wired in
+and `extensions: []`, then builds the context over that stack. Neither `orm`
+nor `surql` ever reads from the stack's driver, so the assembly is identical
+whether one is present or not — what's missing is `connect`, `query`,
+`execute`, and `transaction`, the calls that would actually reach a database.
+
+```ts
+import { surrealdbStatic } from '@internal/extension-surrealdb/static';
+import contractJson from './contract.json' with { type: 'json' };
+
+const { orm, surql } = surrealdbStatic({ contractJson });
+const plan = orm.person.findMany({ where: { age: { gte: 18 } } });
+```
+
+This is for building and inspecting plans without opening a connection: a
+script that emits SurrealQL for review, a test that asserts against a
+compiled plan, or a build step that only needs the collection lane's typing.
+Published as the `static` subpath of `@prisma/orm-surrealdb`.
 
 ## Running the live suite
 

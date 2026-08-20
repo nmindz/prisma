@@ -37,6 +37,18 @@ search over an HNSW index. Several SQL constructs simply do not exist —
 there is no `JOIN`, no `HAVING`, no `OFFSET` (the keyword is `START`), and no
 `RETURNING` (the clause is `RETURN`).
 
+## Other entrypoints
+
+- `@prisma/orm-surrealdb/query-builder` — the contract-free fluent builder
+  (`selectFrom`, `createInto`, `upsertRecord`, `updateWhere`, `deleteWhere`,
+  `relate`, and the `defineTable`/`defineField`/`defineIndex` DDL builders)
+  for callers that don't have a contract in hand.
+- `@prisma/orm-surrealdb/static` — `surrealdbStatic({ contractJson })` builds
+  the same `context`/`orm`/`surql` surface as the default export, without a
+  connection: no URL, no credentials, no driver. Useful for compiling and
+  inspecting plans — a script, a test, or a build step — without reaching a
+  database.
+
 ## Related
 
 - [`@prisma/orm-family-surreal`](../orm-family-surreal) — the family layer.

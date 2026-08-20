@@ -51,6 +51,20 @@ TypeScript and a broken contract. Catching it here names the offending table
 instead of surfacing later as a query failure against the database. The same
 goes for a vector index spanning more than one field, which SurrealDB rejects.
 
+## `onDelete` on a `record<>` field
+
+A field with a `record<>` type takes `onDelete: 'reject' | 'ignore' |
+'cascade' | 'unset'`, lowered straight onto the contract's `reference.kind`
+and, from there, onto SurrealDB's own `REFERENCE ON DELETE` clause — `reject`
+rejects the delete, `ignore` lets it through without touching the link,
+`cascade` deletes the linking record too, and `unset` clears the link. There
+is no `'then'` here: that variant takes a SurrealQL expression rather than a
+fixed keyword, so it isn't exposed as an `onDelete` string and has to be
+authored directly on the contract's `reference` field. `unset` on a field
+that isn't `option<record<...>>` (or an array/set of one) is rejected when
+the contract is validated, since SurrealDB can only clear a link the type
+allows to be absent.
+
 ## Dependencies
 
 - `@internal/surreal-contract` — the IR being built and its invariants.

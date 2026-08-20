@@ -22,6 +22,7 @@ import this package directly.
 | `./runtime` | Execution stack, runtime, row decoding |
 | `./family` | The family pack and its control-plane storage |
 | `./emitter` | `contract.d.ts` emission |
+| `./query-builder` | The contract-free fluent SurrealQL builder |
 
 ## Related
 
