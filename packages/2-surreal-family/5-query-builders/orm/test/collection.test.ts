@@ -600,3 +600,166 @@ describe('identifying a record', () => {
     );
   });
 });
+
+describe('relation filters', () => {
+  const postFields: ReadonlyArray<SurrealField> = [
+    new SurrealField({
+      name: 'title',
+      type: { kind: 'scalar', name: 'string' },
+      codecId: 'string',
+    }),
+    new SurrealField({
+      name: 'author',
+      type: { kind: 'option', of: { kind: 'record', tables: ['person'] } },
+      codecId: 'record',
+    }),
+  ];
+  const personFields: ReadonlyArray<SurrealField> = [
+    new SurrealField({ name: 'name', type: { kind: 'scalar', name: 'string' }, codecId: 'string' }),
+    new SurrealField({
+      name: 'org',
+      type: { kind: 'option', of: { kind: 'record', tables: ['org'] } },
+      codecId: 'record',
+    }),
+    new SurrealField({
+      name: 'posts',
+      type: { kind: 'option', of: { kind: 'array', of: { kind: 'record', tables: ['post'] } } },
+      codecId: 'array',
+    }),
+  ];
+  const post = new SurrealCollection('post', 'sh', undefined, undefined, postFields);
+  const personWithRelations = new SurrealCollection(
+    'person',
+    'sh',
+    undefined,
+    undefined,
+    personFields,
+  );
+
+  describe('to-one', () => {
+    it('lowers a direct match into path traversal', () => {
+      const lowered = surql(post.findMany({ where: { author: { name: 'ada' } } }));
+      expect(lowered.surql).toBe('SELECT * FROM `post` WHERE `author`.`name` = $p0');
+      expect(lowered.params).toEqual([{ name: 'p0', value: 'ada' }]);
+    });
+
+    it('recurses through deeper nesting', () => {
+      expect(surql(post.findMany({ where: { author: { org: { tier: 'gold' } } } })).surql).toBe(
+        'SELECT * FROM `post` WHERE `author`.`org`.`tier` = $p0',
+      );
+    });
+
+    it('applies scalar operators at the leaf', () => {
+      expect(
+        surql(post.findMany({ where: { author: { name: { in: ['ada', 'grace'] } } } })).surql,
+      ).toBe('SELECT * FROM `post` WHERE `author`.`name` INSIDE $p0');
+    });
+
+    it('combines relation terms with AND across sibling keys', () => {
+      expect(
+        surql(post.findMany({ where: { author: { name: 'ada', org: { tier: 'gold' } } } })).surql,
+      ).toBe('SELECT * FROM `post` WHERE (`author`.`name` = $p0 AND `author`.`org`.`tier` = $p1)');
+    });
+
+    it('composes OR inside a relation path', () => {
+      expect(
+        surql(post.findMany({ where: { author: { OR: [{ name: 'ada' }, { name: 'grace' }] } } }))
+          .surql,
+      ).toBe('SELECT * FROM `post` WHERE (`author`.`name` = $p0 OR `author`.`name` = $p1)');
+    });
+
+    it('composes NOT inside a relation path', () => {
+      expect(surql(post.findMany({ where: { author: { NOT: { name: 'ada' } } } })).surql).toBe(
+        'SELECT * FROM `post` WHERE !(`author`.`name` = $p0)',
+      );
+    });
+
+    it('keeps a FieldFilter-shaped value as a comparison on the link field itself', () => {
+      expect(surql(post.findMany({ where: { author: { isNone: true } } })).surql).toBe(
+        'SELECT * FROM `post` WHERE `author` IS NONE',
+      );
+    });
+
+    it('rejects a non-object value for a known relation', () => {
+      expect(() => post.findMany({ where: { author: 'ada' } })).toThrow(
+        /relation "author" must be an object/,
+      );
+    });
+  });
+
+  describe('to-many quantifiers', () => {
+    it('lowers some to a positive-length filtered subselect', () => {
+      expect(
+        surql(personWithRelations.findMany({ where: { posts: { some: { title: 'alpha' } } } }))
+          .surql,
+      ).toBe('SELECT * FROM `person` WHERE array::len(`posts`[WHERE `title` = $p0]) > 0');
+    });
+
+    it('lowers none to a zero-length filtered subselect', () => {
+      expect(
+        surql(personWithRelations.findMany({ where: { posts: { none: { title: 'alpha' } } } }))
+          .surql,
+      ).toBe('SELECT * FROM `person` WHERE array::len(`posts`[WHERE `title` = $p0]) = 0');
+    });
+
+    it('lowers every to the NONE-guarded negated form', () => {
+      expect(
+        surql(personWithRelations.findMany({ where: { posts: { every: { title: 'alpha' } } } }))
+          .surql,
+      ).toBe(
+        'SELECT * FROM `person` WHERE (`posts` IS NONE OR array::len(`posts`[WHERE !(`title` = $p0)]) = 0)',
+      );
+    });
+
+    it('combines multiple quantifier keys with AND', () => {
+      expect(
+        surql(
+          personWithRelations.findMany({
+            where: { posts: { some: { title: 'alpha' }, none: { title: 'gamma' } } },
+          }),
+        ).surql,
+      ).toBe(
+        'SELECT * FROM `person` WHERE (array::len(`posts`[WHERE `title` = $p0]) > 0 AND array::len(`posts`[WHERE `title` = $p1]) = 0)',
+      );
+    });
+
+    it('rejects an unrecognized quantifier key', () => {
+      expect(() =>
+        personWithRelations.findMany({ where: { posts: { anyMatch: { title: 'x' } } } }),
+      ).toThrow(/must use "some", "every", or "none"/);
+    });
+
+    it('rejects a quantifier predicate that is not an object', () => {
+      expect(() => personWithRelations.findMany({ where: { posts: { some: 'alpha' } } })).toThrow(
+        /relation "posts.some" must be an object/,
+      );
+    });
+
+    it('rejects an empty quantifier object', () => {
+      expect(() => personWithRelations.findMany({ where: { posts: {} } })).toThrow(
+        /must use "some", "every", or "none"/,
+      );
+    });
+  });
+
+  describe('pinned fallbacks', () => {
+    it('keeps a bare value under a plain scalar field as equality, not a relation lookup', () => {
+      expect(surql(post.findMany({ where: { title: 'alpha' } })).surql).toBe(
+        'SELECT * FROM `post` WHERE `title` = $p0',
+      );
+    });
+
+    it('keeps an object under a scalar field key as the existing FieldFilter shorthand', () => {
+      expect(surql(post.findMany({ where: { title: { equals: 'alpha' } } })).surql).toBe(
+        'SELECT * FROM `post` WHERE `title` = $p0',
+      );
+    });
+
+    it('falls through to a bare-equals bind when no field metadata is available', () => {
+      const untyped = new SurrealCollection('post', 'sh');
+      const lowered = surql(untyped.findMany({ where: { author: { name: 'ada' } } }));
+      expect(lowered.surql).toBe('SELECT * FROM `post` WHERE `author` = $p0');
+      expect(lowered.params).toEqual([{ name: 'p0', value: { name: 'ada' } }]);
+    });
+  });
+});

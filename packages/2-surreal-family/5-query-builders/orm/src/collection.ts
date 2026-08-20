@@ -450,7 +450,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
 
   findMany(args: FindManyArgs = {}): SurrealQueryPlan<Row> {
     const params = new ParamAllocator();
-    const where = compileWhere(args.where, params);
+    const where = compileWhere(args.where, params, this.#fields);
     const order = orderTerms(args.orderBy);
     const fetch = (args.fetch ?? []).map((name) => field(name));
     return plan<Row>(
@@ -478,7 +478,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
    */
   live(args: LiveArgs = {}): SurrealQueryPlan<Row> {
     const params = new ParamAllocator();
-    const where = compileWhere(args.where, params);
+    const where = compileWhere(args.where, params, this.#fields);
     const fetch = (args.fetch ?? []).map((name) => field(name));
     return plan<Row>(
       [
@@ -523,7 +523,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
 
   count(args: Pick<FindManyArgs, 'where'> = {}): SurrealQueryPlan<{ count: number }> {
     const params = new ParamAllocator();
-    const where = compileWhere(args.where, params);
+    const where = compileWhere(args.where, params, this.#fields);
     return plan<{ count: number }>(
       [
         {
@@ -575,7 +575,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
     }
 
     const params = new ParamAllocator();
-    const where = compileWhere(args.where, params);
+    const where = compileWhere(args.where, params, this.#fields);
     const by = args.by ?? [];
     const grouped: Projection[] = by.map((name) => ({ expr: field(name) }));
     const aggregates: Projection[] = aggregateEntries.map(([alias, selector]) => ({
@@ -772,7 +772,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
   update(args: UpdateArgs): SurrealQueryPlan<Row> {
     const params = new ParamAllocator();
     const content = contentOf(args.data, params);
-    const where = compileWhere(args.where, params);
+    const where = compileWhere(args.where, params, this.#fields);
     return plan<Row>(
       [
         {
@@ -793,7 +793,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
 
   delete(args: DeleteArgs = {}): SurrealQueryPlan<Row> {
     const params = new ParamAllocator();
-    const where = compileWhere(args.where, params);
+    const where = compileWhere(args.where, params, this.#fields);
     return plan<Row>(
       [
         {

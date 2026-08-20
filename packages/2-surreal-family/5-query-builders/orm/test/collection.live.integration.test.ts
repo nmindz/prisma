@@ -318,6 +318,136 @@ describe.skipIf(!available)('upsert and groupBy against a live SurrealDB', () =>
   });
 });
 
+describe.skipIf(!available)('relation filters against a live SurrealDB', () => {
+  const driver = new SurrealDriverImpl();
+
+  async function run<Row>(plan: SurrealQueryPlan<Row>): Promise<Row[]> {
+    const lowered = lowerQuery(plan.query);
+    const vars = Object.fromEntries(lowered.params.map((p) => [p.name, p.value]));
+    const rows: Row[] = [];
+    for await (const row of driver.query<Row>({
+      surql: lowered.surql,
+      vars,
+      ...(plan.resultIndex === undefined ? {} : { resultIndex: plan.resultIndex }),
+    })) {
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  async function exec(surql: string): Promise<void> {
+    for await (const _row of driver.query({ surql })) {
+      // DDL — nothing to collect.
+    }
+  }
+
+  const postFields: ReadonlyArray<SurrealField> = [
+    new SurrealField({
+      name: 'title',
+      type: { kind: 'scalar', name: 'string' },
+      codecId: 'string',
+    }),
+    new SurrealField({
+      name: 'author',
+      type: { kind: 'option', of: { kind: 'record', tables: ['person'] } },
+      codecId: 'record',
+    }),
+  ];
+  const personFields: ReadonlyArray<SurrealField> = [
+    new SurrealField({ name: 'name', type: { kind: 'scalar', name: 'string' }, codecId: 'string' }),
+    new SurrealField({
+      name: 'org',
+      type: { kind: 'option', of: { kind: 'record', tables: ['org'] } },
+      codecId: 'record',
+    }),
+    new SurrealField({
+      name: 'posts',
+      type: { kind: 'option', of: { kind: 'array', of: { kind: 'record', tables: ['post'] } } },
+      codecId: 'array',
+    }),
+  ];
+  const post = new SurrealCollection<{ id: unknown; title: string }>(
+    'post',
+    'sh',
+    undefined,
+    undefined,
+    postFields,
+  );
+  const person = new SurrealCollection<{ id: unknown; name: string }>(
+    'person',
+    'sh',
+    undefined,
+    undefined,
+    personFields,
+  );
+
+  beforeAll(async () => {
+    await driver.connect(binding);
+    await exec('REMOVE TABLE IF EXISTS `org`');
+    await exec('REMOVE TABLE IF EXISTS `person`');
+    await exec('REMOVE TABLE IF EXISTS `post`');
+    await exec("CREATE org:acme SET tier = 'gold'");
+    await exec("CREATE org:beta SET tier = 'silver'");
+    await exec("CREATE post:p1 SET title = 'alpha'");
+    await exec("CREATE post:p2 SET title = 'beta'");
+    await exec("CREATE post:p3 SET title = 'gamma'");
+    await exec("CREATE person:ada SET name = 'ada', org = org:acme, posts = [post:p1, post:p2]");
+    await exec("CREATE person:grace SET name = 'grace', org = org:beta, posts = []");
+    await exec("CREATE person:linus SET name = 'linus', posts = [post:p3]");
+    await exec("CREATE person:zoe SET name = 'zoe'");
+    await exec('UPDATE post:p1 SET author = person:ada');
+    await exec('UPDATE post:p2 SET author = person:ada');
+  });
+
+  afterAll(async () => {
+    await driver.close();
+  });
+
+  describe('to-one', () => {
+    it('matches through a direct link field', async () => {
+      const rows = await run(post.findMany({ where: { author: { name: 'ada' } } }));
+      expect(rows.map((row) => row.title).sort()).toEqual(['alpha', 'beta']);
+    });
+
+    it('excludes a record whose link is absent, even though the predicate is unmet elsewhere too', async () => {
+      const rows = await run(post.findMany({ where: { author: { name: 'nobody' } } }));
+      expect(rows).toEqual([]);
+    });
+
+    it('recurses two hops deep', async () => {
+      const rows = await run(post.findMany({ where: { author: { org: { tier: 'gold' } } } }));
+      expect(rows.map((row) => row.title).sort()).toEqual(['alpha', 'beta']);
+    });
+
+    it('finds nothing through a chain no record satisfies', async () => {
+      const rows = await run(post.findMany({ where: { author: { org: { tier: 'platinum' } } } }));
+      expect(rows).toEqual([]);
+    });
+  });
+
+  describe('to-many quantifiers — the optional-link truth table', () => {
+    it('some matches only the record whose array has a satisfying element', async () => {
+      const rows = await run(person.findMany({ where: { posts: { some: { title: 'alpha' } } } }));
+      expect(rows.map((row) => row.name)).toEqual(['ada']);
+    });
+
+    it('none passes vacuously for an empty array and for an absent link, and fails when an element matches', async () => {
+      const rows = await run(person.findMany({ where: { posts: { none: { title: 'alpha' } } } }));
+      expect(rows.map((row) => row.name).sort()).toEqual(['grace', 'linus', 'zoe']);
+    });
+
+    it('every passes vacuously for an empty array and for an absent link, and fails when any element misses', async () => {
+      const rows = await run(person.findMany({ where: { posts: { every: { title: 'alpha' } } } }));
+      expect(rows.map((row) => row.name).sort()).toEqual(['grace', 'zoe']);
+    });
+
+    it('every passes for an array whose sole element matches, alongside the same vacuous cases', async () => {
+      const rows = await run(person.findMany({ where: { posts: { every: { title: 'gamma' } } } }));
+      expect(rows.map((row) => row.name).sort()).toEqual(['grace', 'linus', 'zoe']);
+    });
+  });
+});
+
 describe.skipIf(available)('SurrealDB orm collection-lane suite', () => {
   it('is skipped because SurrealDB is not reachable', () => {
     expect(available).toBe(false);
