@@ -22,8 +22,8 @@ export interface SelectInput {
 
 export type OrderByInput = Readonly<Record<string, 'asc' | 'desc' | undefined>>;
 
-export interface FindManyArgs {
-  readonly where?: WhereInput;
+export interface FindManyArgs<TFieldNames extends string = string> {
+  readonly where?: WhereInput<TFieldNames>;
   readonly select?: SelectInput;
   readonly orderBy?: OrderByInput | readonly OrderByInput[];
   readonly limit?: number;
@@ -44,8 +44,8 @@ export interface FindManyArgs {
  * accepts no ordering, paging or grouping on a `LIVE SELECT`: a notification
  * describes one record, so there is nothing to order or page.
  */
-export interface LiveArgs {
-  readonly where?: WhereInput;
+export interface LiveArgs<TFieldNames extends string = string> {
+  readonly where?: WhereInput<TFieldNames>;
   readonly select?: SelectInput;
   readonly fetch?: readonly string[];
   /** `LIVE SELECT DIFF` — notifications carry a JSON Patch, not the record. */
@@ -92,8 +92,8 @@ export interface UpsertByUniqueArgs {
 
 export type UpsertArgs = UpsertByIdArgs | UpsertByUniqueArgs;
 
-export interface UpdateArgs {
-  readonly where?: WhereInput;
+export interface UpdateArgs<TFieldNames extends string = string> {
+  readonly where?: WhereInput<TFieldNames>;
   readonly id?: RecordKeyInput;
   readonly data: Readonly<Record<string, unknown>>;
   /** `MERGE` keeps unlisted fields; the default `CONTENT` replaces the record. */
@@ -101,8 +101,8 @@ export interface UpdateArgs {
   readonly select?: SelectInput;
 }
 
-export interface DeleteArgs {
-  readonly where?: WhereInput;
+export interface DeleteArgs<TFieldNames extends string = string> {
+  readonly where?: WhereInput<TFieldNames>;
   readonly id?: RecordKeyInput;
 }
 
@@ -147,12 +147,12 @@ export interface AggregateSelector {
   readonly field?: string;
 }
 
-export interface GroupByArgs {
+export interface GroupByArgs<TFieldNames extends string = string> {
   /** Fields to group by. Omitted or empty groups the whole table (`GROUP ALL`). */
   readonly by?: readonly string[];
   /** Aggregate projections, keyed by the alias each comes back under. */
   readonly aggregate: Readonly<Record<string, AggregateSelector>>;
-  readonly where?: WhereInput;
+  readonly where?: WhereInput<TFieldNames>;
 }
 
 const NUMERIC_SCALARS: ReadonlySet<SurrealScalarTypeName> = new Set([
@@ -427,7 +427,7 @@ function matchUniqueIndex(
  * same object serves a client, a transaction, and a test that only wants to
  * inspect the SurrealQL a call produces.
  */
-export class SurrealCollection<Row = Record<string, unknown>> {
+export class SurrealCollection<Row = Record<string, unknown>, TFieldNames extends string = string> {
   readonly #table: string;
   readonly #storageHash: string;
   readonly #resultShape: SurrealResultShape | undefined;
@@ -448,7 +448,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
     this.#fields = fields;
   }
 
-  findMany(args: FindManyArgs = {}): SurrealQueryPlan<Row> {
+  findMany(args: FindManyArgs<TFieldNames> = {}): SurrealQueryPlan<Row> {
     const params = new ParamAllocator();
     const where = compileWhere(args.where, params, this.#fields);
     const order = orderTerms(args.orderBy);
@@ -476,7 +476,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
    * returning rows. The `WHERE` runs on the server against each change, so a
    * filtered subscription costs the client nothing.
    */
-  live(args: LiveArgs = {}): SurrealQueryPlan<Row> {
+  live(args: LiveArgs<TFieldNames> = {}): SurrealQueryPlan<Row> {
     const params = new ParamAllocator();
     const where = compileWhere(args.where, params, this.#fields);
     const fetch = (args.fetch ?? []).map((name) => field(name));
@@ -521,7 +521,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
     );
   }
 
-  count(args: Pick<FindManyArgs, 'where'> = {}): SurrealQueryPlan<{ count: number }> {
+  count(args: Pick<FindManyArgs<TFieldNames>, 'where'> = {}): SurrealQueryPlan<{ count: number }> {
     const params = new ParamAllocator();
     const where = compileWhere(args.where, params, this.#fields);
     return plan<{ count: number }>(
@@ -555,7 +555,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
    * one per aggregate alias — mirroring how the rest of this lane types
    * untransformed read results.
    */
-  groupBy(args: GroupByArgs): SurrealQueryPlan<Record<string, unknown>> {
+  groupBy(args: GroupByArgs<TFieldNames>): SurrealQueryPlan<Record<string, unknown>> {
     const aggregateEntries = Object.entries(args.aggregate);
     if (aggregateEntries.length === 0) {
       throw structuredError(
@@ -769,7 +769,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
     );
   }
 
-  update(args: UpdateArgs): SurrealQueryPlan<Row> {
+  update(args: UpdateArgs<TFieldNames>): SurrealQueryPlan<Row> {
     const params = new ParamAllocator();
     const content = contentOf(args.data, params);
     const where = compileWhere(args.where, params, this.#fields);
@@ -791,7 +791,7 @@ export class SurrealCollection<Row = Record<string, unknown>> {
     );
   }
 
-  delete(args: DeleteArgs = {}): SurrealQueryPlan<Row> {
+  delete(args: DeleteArgs<TFieldNames> = {}): SurrealQueryPlan<Row> {
     const params = new ParamAllocator();
     const where = compileWhere(args.where, params, this.#fields);
     return plan<Row>(

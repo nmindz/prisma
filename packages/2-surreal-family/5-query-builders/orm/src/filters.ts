@@ -2,7 +2,18 @@ import type { SurrealField } from '@internal/surreal-contract';
 import { renderSurrealType, unwrapOptional } from '@internal/surreal-contract';
 import type { SurrealFieldType } from '@internal/surreal-contract/types';
 import type { SurrealExpr } from '@internal/surreal-query-ast';
-import { and, binary, field, fn, isNone, lit, not, or, param } from '@internal/surreal-query-ast';
+import {
+  and,
+  binary,
+  field,
+  fn,
+  isNone,
+  isSurrealExprNode,
+  lit,
+  not,
+  or,
+  param,
+} from '@internal/surreal-query-ast';
 import { assertNever } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 
@@ -43,14 +54,47 @@ export interface FieldFilter {
 
 export type WhereValue = FieldFilter | unknown;
 
-export interface WhereInput {
-  readonly AND?: readonly WhereInput[];
-  readonly OR?: readonly WhereInput[];
-  readonly NOT?: WhereInput;
+/**
+ * A `where` clause for a table whose field names are not known statically —
+ * a contract loaded from JSON with no generated `contract.d.ts` behind it.
+ * Any key is accepted; `compileWhere` still checks it against the table's
+ * runtime field list when one is available.
+ */
+export interface OpenWhereInput {
+  readonly AND?: readonly OpenWhereInput[];
+  readonly OR?: readonly OpenWhereInput[];
+  readonly NOT?: OpenWhereInput;
   readonly [fieldName: string]: unknown;
 }
 
+/**
+ * A `where` clause keyed by a table's declared field names, plus the
+ * structural `id` every record carries regardless of what the table
+ * declares.
+ */
+type KeyedWhereInput<TFieldNames extends string> = {
+  readonly [K in TFieldNames | 'id']?: unknown;
+} & {
+  readonly AND?: readonly WhereInput<TFieldNames>[];
+  readonly OR?: readonly WhereInput<TFieldNames>[];
+  readonly NOT?: WhereInput<TFieldNames>;
+};
+
+/**
+ * `WhereInput<TFieldNames>` keys itself by the table's field names when
+ * `TFieldNames` is a literal union — the case a typed collection built off a
+ * generated contract produces. Left at its default (`string`), it falls back
+ * to `OpenWhereInput`, unchanged from before this type took a parameter, so
+ * every existing bare usage keeps compiling exactly as it did.
+ */
+export type WhereInput<TFieldNames extends string = string> = string extends TFieldNames
+  ? OpenWhereInput
+  : KeyedWhereInput<TFieldNames>;
+
 const COMBINATORS = new Set(['AND', 'OR', 'NOT']);
+
+/** Keys `compileWhere` accepts even though the table never declares them. */
+const IMPLICIT_FILTER_KEYS: ReadonlySet<string> = new Set(['id']);
 
 /**
  * The operators a `FieldFilter` may carry, in the order they are compiled.
@@ -137,6 +181,78 @@ function assertStringOperandField(
     'RUNTIME.FILTER_FIELD_TYPE_NOT_STRING',
     `where clause cannot use "${operator}" on field "${path}" (type ${typeText}): ${operator} requires a string field`,
     { meta: { field: path, operator, fieldType: typeText } },
+  );
+}
+
+/**
+ * Whether a value looks like a compiled plan: an object carrying a `query`
+ * whose `statements` is an array of statement-shaped entries. Statement
+ * objects are plain data by design, so this matches on the structural
+ * signature a plan cannot exist without rather than on the node brand.
+ */
+function isPlanShaped(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const carried = Reflect.get(value, 'query') ?? Reflect.get(value, 'statement');
+  if (isSurrealExprNode(carried)) return true;
+  if (typeof carried !== 'object' || carried === null) return false;
+  const statements = Reflect.get(carried, 'statements');
+  return (
+    Array.isArray(statements) &&
+    statements.every(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof Reflect.get(entry, 'kind') === 'string',
+    ) &&
+    statements.length > 0
+  );
+}
+
+/**
+ * Rejects values that can never be data: compiled query nodes, plan-shaped
+ * objects, functions, and symbols. Binding one would not fail on its own — it
+ * encodes as inert structure and matches nothing — so the mistake surfaces
+ * here, at the call that made it, instead of as a silently empty result.
+ */
+function assertBindableOperand(path: string, value: unknown): void {
+  const received =
+    typeof value === 'function'
+      ? 'a function'
+      : typeof value === 'symbol'
+        ? 'a symbol'
+        : isSurrealExprNode(value)
+          ? 'a compiled query expression'
+          : isPlanShaped(value)
+            ? 'a compiled plan'
+            : undefined;
+  if (received !== undefined) {
+    throw structuredError(
+      'RUNTIME.FILTER_VALUE_INVALID',
+      `where clause value for "${path}" is ${received}; filter values must be plain data`,
+      { meta: { field: path, received } },
+    );
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) assertBindableOperand(path, entry);
+  }
+}
+
+/**
+ * Rejects a `where` key that names nothing on the table. Only reachable when
+ * the field list is known; record ids are structural rather than declared, so
+ * `id` (and a dotted path starting from a declared field or `id`) stays
+ * allowed.
+ */
+function assertKnownFilterKey(key: string, fields: ReadonlyArray<SurrealField>): void {
+  const head = key.includes('.') ? key.slice(0, key.indexOf('.')) : key;
+  if (IMPLICIT_FILTER_KEYS.has(head) || fields.some((candidate) => candidate.name === head)) return;
+  const declared = [...IMPLICIT_FILTER_KEYS, ...fields.map((candidate) => candidate.name)].join(
+    ', ',
+  );
+  throw structuredError(
+    'RUNTIME.FILTER_FIELD_UNKNOWN',
+    `where clause names unknown field "${key}" on this table; declared fields: ${declared}`,
+    { meta: { field: key, declared } },
   );
 }
 
@@ -237,6 +353,8 @@ export function compileWhere(
       if (combined !== undefined) terms.push(combined);
       continue;
     }
+    if (fields !== undefined) assertKnownFilterKey(key, fields);
+    assertBindableOperand(key, value);
 
     const relation = fields === undefined ? undefined : classifyRelationField(key, fields);
     if (relation !== undefined) {
@@ -329,6 +447,7 @@ function compileRelationTerms(
       continue;
     }
     const path = `${basePath}.${key}`;
+    assertBindableOperand(path, value);
     if (isWhereInput(value) && !isFieldFilter(value)) {
       terms.push(...compileRelationTerms(path, value, params, fields));
     } else {
@@ -453,6 +572,7 @@ function compileFieldTerms(
 ): readonly SurrealExpr[] {
   if (!isFieldFilter(value)) {
     // A bare value is shorthand for `equals`.
+    assertBindableOperand(path, value);
     return [binary('=', field(path), params.bind(value))];
   }
   if (value.mode !== undefined) assertStringOperandField(path, 'mode', fields);
@@ -461,6 +581,7 @@ function compileFieldTerms(
   for (const operator of FIELD_FILTER_OPERATORS) {
     const operand = value[operator];
     if (operand === undefined) continue;
+    assertBindableOperand(path, operand);
     if (STRING_ONLY_OPERATORS.has(operator)) assertStringOperandField(path, operator, fields);
     terms.push(comparison(path, operator, operand, params, insensitive));
   }

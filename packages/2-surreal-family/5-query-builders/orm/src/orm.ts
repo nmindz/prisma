@@ -1,3 +1,4 @@
+import type { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/default-namespace';
 import type { Contract } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SurrealStorageShape } from '@internal/surreal-contract/types';
@@ -24,11 +25,46 @@ export type TableNames<TContract extends Contract<SurrealStorageShape>> =
  * back to an open one. Collapsing to no keys instead would make the lane
  * unusable exactly where it is most likely to be reached for.
  */
+/**
+ * The domain model a table's root points at, resolved at the type level.
+ *
+ * Emitted declaration files carry these as literals, so the chain
+ * `roots[table].model → domain models[model]` lands on literal field and
+ * relation names. A contract without that detail resolves every step to
+ * `string`, which `WhereInput` treats as the open-map form — nothing narrows,
+ * nothing breaks.
+ */
+type UnboundModels<TContract extends Contract<SurrealStorageShape>> =
+  TContract['domain']['namespaces'][typeof UNBOUND_DOMAIN_NAMESPACE_ID]['models'];
+
+type ModelNameFor<
+  TContract extends Contract<SurrealStorageShape>,
+  Table extends string,
+> = Table extends keyof TContract['roots']
+  ? TContract['roots'][Table] extends { readonly model: infer M extends string }
+    ? M
+    : string
+  : string;
+
+export type WhereKeysFor<TContract extends Contract<SurrealStorageShape>, Table extends string> =
+  ModelNameFor<TContract, Table> extends infer M
+    ? M extends keyof UnboundModels<TContract> & string
+      ?
+          | (keyof UnboundModels<TContract>[M]['fields'] & string)
+          | (keyof UnboundModels<TContract>[M]['relations'] & string)
+      : string
+    : string;
+
 export type SurrealOrm<TContract extends Contract<SurrealStorageShape>> = [
   TableNames<TContract>,
 ] extends [never]
   ? Readonly<Record<string, SurrealCollection>>
-  : { readonly [Table in TableNames<TContract>]: SurrealCollection };
+  : {
+      readonly [Table in TableNames<TContract>]: SurrealCollection<
+        Record<string, unknown>,
+        WhereKeysFor<TContract, Table>
+      >;
+    };
 
 /**
  * Builds the collection lane over a contract.

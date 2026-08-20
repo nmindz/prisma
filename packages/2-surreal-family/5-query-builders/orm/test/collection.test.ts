@@ -1,5 +1,6 @@
 import { SurrealField, SurrealIndex } from '@internal/surreal-contract';
 import { lowerQuery } from '@internal/surreal-lowering';
+import { field } from '@internal/surreal-query-ast';
 import { RecordId } from '@internal/surreal-value';
 import { describe, expect, it } from 'vitest';
 import { SurrealCollection } from '../src/collection';
@@ -233,9 +234,9 @@ describe('string filter operators', () => {
     );
   });
 
-  it('allows startsWith when the field is not declared on the table', () => {
-    expect(surql(typed.findMany({ where: { unknownField: { startsWith: 'a' } } })).surql).toBe(
-      'SELECT * FROM `metric` WHERE string::starts_with(`unknownField`, $p0)',
+  it('rejects startsWith on a field the table never declares', () => {
+    expect(() => typed.findMany({ where: { unknownField: { startsWith: 'a' } } })).toThrow(
+      /unknown field "unknownField"/,
     );
   });
 
@@ -906,6 +907,118 @@ describe('relation filters', () => {
       const lowered = surql(untyped.findMany({ where: { author: { name: 'ada' } } }));
       expect(lowered.surql).toBe('SELECT * FROM `post` WHERE `author` = $p0');
       expect(lowered.params).toEqual([{ name: 'p0', value: { name: 'ada' } }]);
+    });
+  });
+});
+
+describe('where input guards', () => {
+  const guardedFields: ReadonlyArray<SurrealField> = [
+    new SurrealField({
+      name: 'title',
+      type: { kind: 'scalar', name: 'string' },
+      codecId: 'string',
+    }),
+    new SurrealField({
+      name: 'author',
+      type: { kind: 'option', of: { kind: 'record', tables: ['person'] } },
+      codecId: 'record',
+    }),
+  ];
+  const guarded = new SurrealCollection('post', 'sh', undefined, undefined, guardedFields);
+
+  describe('value guards', () => {
+    it('rejects a compiled expression node as a bare filter value', () => {
+      expect(() => guarded.findMany({ where: { title: field('title') } })).toThrow(
+        /filter values must be plain data/,
+      );
+    });
+
+    it('rejects a compiled expression node inside an operator object', () => {
+      expect(() => guarded.findMany({ where: { title: { equals: field('title') } } })).toThrow(
+        /filter values must be plain data/,
+      );
+    });
+
+    it('rejects a compiled expression node inside an array operand', () => {
+      expect(() => guarded.findMany({ where: { title: { in: ['a', field('title')] } } })).toThrow(
+        /filter values must be plain data/,
+      );
+    });
+
+    it('rejects a function as a filter value', () => {
+      expect(() => guarded.findMany({ where: { title: () => 'ada' } })).toThrow(
+        /filter values must be plain data/,
+      );
+    });
+
+    it('rejects a symbol as a filter value', () => {
+      expect(() => guarded.findMany({ where: { title: Symbol('x') } })).toThrow(
+        /filter values must be plain data/,
+      );
+    });
+
+    it('rejects a plan-shaped object as a filter value', () => {
+      const planLike = guarded.findMany({ where: { title: 'a' } });
+      expect(() => guarded.findMany({ where: { title: planLike } })).toThrow(
+        /filter values must be plain data/,
+      );
+    });
+
+    it('rejects a compiled expression node at a relation leaf', () => {
+      expect(() => guarded.findMany({ where: { author: { name: field('name') } } })).toThrow(
+        /filter values must be plain data/,
+      );
+    });
+
+    it('rejects a compiled expression node without field metadata', () => {
+      const untyped = new SurrealCollection('post', 'sh');
+      expect(() => untyped.findMany({ where: { title: field('title') } })).toThrow(
+        /filter values must be plain data/,
+      );
+    });
+  });
+
+  describe('key guards', () => {
+    it('rejects a key that names no declared field, listing the declared ones', () => {
+      expect(() => guarded.findMany({ where: { titel: 'a' } })).toThrow(
+        /unknown field "titel".*id, title, author/,
+      );
+    });
+
+    it('allows id even though record ids are not declared fields', () => {
+      const lowered = surql(guarded.findMany({ where: { id: 'post:1' } }));
+      expect(lowered.surql).toBe('SELECT * FROM `post` WHERE `id` = $p0');
+    });
+
+    it('allows a dotted path whose head is a declared field', () => {
+      expect(surql(guarded.findMany({ where: { 'author.name': 'ada' } })).surql).toBe(
+        'SELECT * FROM `post` WHERE `author`.`name` = $p0',
+      );
+    });
+
+    it('rejects a dotted path whose head is unknown', () => {
+      expect(() => guarded.findMany({ where: { 'auteur.name': 'ada' } })).toThrow(
+        /unknown field "auteur.name"/,
+      );
+    });
+
+    it('keeps arbitrary keys compiling when no field metadata is available', () => {
+      const untyped = new SurrealCollection('post', 'sh');
+      expect(surql(untyped.findMany({ where: { anything: 'goes' } })).surql).toBe(
+        'SELECT * FROM `post` WHERE `anything` = $p0',
+      );
+    });
+
+    it('does not apply the key guard inside quantifier predicates', () => {
+      const withPosts = new SurrealCollection('person', 'sh', undefined, undefined, [
+        new SurrealField({
+          name: 'posts',
+          type: { kind: 'array', of: { kind: 'record', tables: ['post'] } },
+          codecId: 'array',
+        }),
+      ]);
+      const lowered = surql(withPosts.findMany({ where: { posts: { some: { title: 'alpha' } } } }));
+      expect(lowered.surql).toContain('array::len');
     });
   });
 });
