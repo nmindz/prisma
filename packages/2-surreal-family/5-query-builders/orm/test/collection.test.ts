@@ -909,6 +909,110 @@ describe('relation filters', () => {
       expect(lowered.params).toEqual([{ name: 'p0', value: { name: 'ada' } }]);
     });
   });
+
+  describe('include', () => {
+    it('compiles a boolean include to exactly what an equivalent fetch compiles to', () => {
+      const viaInclude = personWithRelations.findMany({ include: { org: true } });
+      const viaFetch = personWithRelations.findMany({ fetch: ['org'] });
+      expect(viaInclude).toEqual(viaFetch);
+      expect(surql(viaInclude).surql).toBe('SELECT * FROM `person` FETCH `org`');
+    });
+
+    it('omits a relation explicitly set to false', () => {
+      expect(surql(personWithRelations.findMany({ include: { org: false } })).surql).toBe(
+        'SELECT * FROM `person`',
+      );
+    });
+
+    it('appends included relations to an explicit select', () => {
+      expect(
+        surql(personWithRelations.findMany({ select: { name: true }, include: { org: true } }))
+          .surql,
+      ).toBe('SELECT `name` FROM `person` FETCH `org`');
+    });
+
+    it('dedupes a boolean include already present in an explicit fetch', () => {
+      expect(
+        surql(personWithRelations.findMany({ fetch: ['org'], include: { org: true } })).surql,
+      ).toBe('SELECT * FROM `person` FETCH `org`');
+    });
+
+    it('narrows a to-one include to a correlated FROM ONLY subquery', () => {
+      const lowered = surql(
+        personWithRelations.findMany({ include: { org: { select: { name: true } } } }),
+      );
+      expect(lowered.surql).toBe(
+        'SELECT *, (SELECT `name` FROM ONLY $parent.org) AS `org` FROM `person`',
+      );
+      expect(lowered.params).toEqual([]);
+    });
+
+    it('filters a to-many include without filtering the parent, via a correlated subquery', () => {
+      const lowered = surql(
+        personWithRelations.findMany({
+          include: { posts: { where: { title: { not: 'gamma' } } } },
+        }),
+      );
+      expect(lowered.surql).toBe(
+        'SELECT *, (SELECT * FROM $parent.posts WHERE `title` != $posts_p0) AS `posts` FROM `person`',
+      );
+      expect(lowered.params).toEqual([{ name: 'posts_p0', value: 'gamma' }]);
+    });
+
+    it('nests a plain fetch one level inside a narrowed/filtered include', () => {
+      expect(
+        surql(personWithRelations.findMany({ include: { posts: { include: { author: true } } } }))
+          .surql,
+      ).toBe('SELECT *, (SELECT * FROM $parent.posts FETCH `author`) AS `posts` FROM `person`');
+    });
+
+    it('rejects "where" on a to-one relation include', () => {
+      expect(() =>
+        personWithRelations.findMany({ include: { org: { where: { tier: 'gold' } } } }),
+      ).toThrow(/"org" cannot use "where"/);
+    });
+
+    it('rejects a third level of include nesting', () => {
+      const invalidNestedInclude = { select: { title: true } } as unknown as boolean;
+      expect(() =>
+        personWithRelations.findMany({
+          include: { posts: { include: { author: invalidNestedInclude } } },
+        }),
+      ).toThrow(/nests a third level/);
+    });
+
+    it('rejects an include key that names no declared relation', () => {
+      expect(() => personWithRelations.findMany({ include: { bogus: true } })).toThrow(
+        /include names "bogus".*declared relations: org, posts/,
+      );
+    });
+
+    it('rejects an include key for a declared field that is not a relation', () => {
+      expect(() => personWithRelations.findMany({ include: { name: true } })).toThrow(
+        /include names "name".*declared relations: org, posts/,
+      );
+    });
+
+    it('rejects a narrowed/filtered include when no field metadata is available', () => {
+      const untyped = new SurrealCollection('person', 'sh');
+      expect(() => untyped.findMany({ include: { org: { select: { name: true } } } })).toThrow(
+        /needs to know whether "org" is a to-one or to-many relation/,
+      );
+    });
+
+    it('still compiles a boolean include when no field metadata is available', () => {
+      const untyped = new SurrealCollection('person', 'sh');
+      expect(surql(untyped.findMany({ include: { org: true } })).surql).toBe(
+        'SELECT * FROM `person` FETCH `org`',
+      );
+    });
+
+    it('composes with findUnique', () => {
+      expect(surql(personWithRelations.findUnique('ada', { include: { org: true } })).surql).toBe(
+        'SELECT * FROM ONLY `person`:`ada` FETCH `org`',
+      );
+    });
+  });
 });
 
 describe('where input guards', () => {

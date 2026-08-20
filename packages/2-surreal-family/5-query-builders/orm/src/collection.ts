@@ -9,18 +9,58 @@ import type {
   SurrealQuery,
   SurrealStatement,
 } from '@internal/surreal-query-ast';
-import { all, and, arr, binary, field, fn, letRef, obj } from '@internal/surreal-query-ast';
+import { all, and, arr, binary, field, fn, letRef, obj, raw } from '@internal/surreal-query-ast';
 import type { SurrealQueryPlan, SurrealResultShape } from '@internal/surreal-query-ast/plan';
 import { RecordId } from '@internal/surreal-value';
 import { assertNever } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
-import { compileWhere, ParamAllocator, type WhereInput } from './filters';
+import {
+  classifyRelationField,
+  classifyRelationFieldType,
+  compileWhere,
+  type OpenWhereInput,
+  ParamAllocator,
+  type RelationFieldKind,
+  type WhereInput,
+} from './filters';
 
 export interface SelectInput {
   readonly [fieldName: string]: boolean | undefined;
 }
 
 export type OrderByInput = Readonly<Record<string, 'asc' | 'desc' | undefined>>;
+
+/**
+ * A narrowed or filtered relation load: `select` projects only the named
+ * fields off the linked record(s), `where` filters which linked records come
+ * back (to-many only — a to-one link has no "which one" to filter), and
+ * `include` FETCHes that relation's own links one level further.
+ *
+ * `where` and the nested `include` stay untyped against the linked table's
+ * fields (`OpenWhereInput`, `boolean`-only include) because a collection only
+ * ever carries its own table's field list — the linked table's fields are not
+ * available here to classify a second hop by type, the same limit `where`'s
+ * own relation traversal already lives with.
+ */
+export interface IncludeObject {
+  readonly select?: SelectInput;
+  readonly where?: OpenWhereInput;
+  readonly include?: Readonly<Record<string, boolean>>;
+}
+
+export type IncludeValue = boolean | IncludeObject;
+
+export interface OpenIncludeInput {
+  readonly [relationName: string]: IncludeValue | undefined;
+}
+
+type KeyedIncludeInput<TFieldNames extends string> = {
+  readonly [K in TFieldNames]?: IncludeValue;
+};
+
+export type IncludeInput<TFieldNames extends string = string> = string extends TFieldNames
+  ? OpenIncludeInput
+  : KeyedIncludeInput<TFieldNames>;
 
 export interface FindManyArgs<TFieldNames extends string = string> {
   readonly where?: WhereInput<TFieldNames>;
@@ -32,11 +72,20 @@ export interface FindManyArgs<TFieldNames extends string = string> {
   /**
    * `FETCH` — replaces a `record<>` link with the record it points at.
    *
-   * This is SurrealQL's mechanism for the role `include` plays in the SQL
-   * and Mongo lanes. There is no separate `include` method here because
-   * `FETCH` is already a first-class clause on every read.
+   * This is SurrealQL's low-level mechanism for loading a relation. `include`
+   * below is the compatibility surface built on top of it; reach for `fetch`
+   * directly only when a relation's name isn't known ahead of time as a
+   * literal, or none of `include`'s narrowed/filtered forms fit.
    */
   readonly fetch?: readonly string[];
+  /**
+   * Loads a declared relation's linked record(s) — `true` compiles to
+   * exactly what `fetch: ['name']` compiles to; an object narrows the
+   * projection (`select`) or filters which linked records come back
+   * (`where`, to-many only). Composes with an explicit `fetch` (deduped) and
+   * with `select` (appended to the projection).
+   */
+  readonly include?: IncludeInput<TFieldNames>;
 }
 
 /**
@@ -307,6 +356,169 @@ function selectFor(args: FindManyArgs): readonly Projection[] {
   return names.map((name) => ({ expr: field(name) }));
 }
 
+/** The declared relation field names on a table, in declaration order. */
+function relationNamesOf(fields: ReadonlyArray<SurrealField>): readonly string[] {
+  return fields
+    .filter((candidate) => classifyRelationFieldType(unwrapOptional(candidate.type)) !== undefined)
+    .map((candidate) => candidate.name);
+}
+
+/**
+ * Rejects an `include` key that names nothing this table declares as a
+ * relation — an unknown field, or a declared field that is not a `record<>`
+ * link or an array/set of one.
+ */
+function assertKnownIncludeKey(
+  key: string,
+  fields: ReadonlyArray<SurrealField>,
+): RelationFieldKind {
+  const relation = classifyRelationField(key, fields);
+  if (relation !== undefined) return relation;
+  const declared = relationNamesOf(fields);
+  throw structuredError(
+    'RUNTIME.INCLUDE_FIELD_UNKNOWN',
+    `include names "${key}", which is not a declared relation on this table; declared relations: ${declared.length === 0 ? '(none)' : declared.join(', ')}`,
+    { meta: { field: key, declared } },
+  );
+}
+
+/**
+ * `$parent.<name>` — the correlated reference a subquery nested in a
+ * projection uses to reach the enclosing row. `name` is always an
+ * already-classified declared field name, never caller-supplied text, so
+ * splicing it through `raw` carries nothing an author typed.
+ */
+function parentField(name: string): SurrealExpr {
+  return raw(`$parent.${name}`);
+}
+
+/** The projection for an `include`d relation's own `select`, or `*` when none was given. */
+function projectionsForSelect(select: SelectInput | undefined): readonly Projection[] {
+  const chosen = Object.entries(select ?? {})
+    .filter(([, included]) => included === true)
+    .map(([name]) => name);
+  if (chosen.length === 0) return [{ expr: all() }];
+  return chosen.map((name) => ({ expr: field(name) }));
+}
+
+/**
+ * The `FETCH` names for an `include`d relation's own nested `include`.
+ *
+ * This is the second level of `include` nesting, and the last one: its
+ * values may only be `boolean` (a plain `FETCH`, which composes at any
+ * depth), never another narrowed/filtered object, because classifying that
+ * third hop would need the linked table's own field list, which this
+ * collection never carries.
+ */
+function nestedFetchNames(
+  outerKey: string,
+  include: Readonly<Record<string, boolean>> | undefined,
+): readonly SurrealExpr[] {
+  if (include === undefined) return [];
+  const names: string[] = [];
+  for (const [name, value] of Object.entries(include)) {
+    if (value === undefined) continue;
+    if (typeof value !== 'boolean') {
+      throw structuredError(
+        'RUNTIME.INCLUDE_DEPTH_EXCEEDED',
+        `include on "${outerKey}.${name}" nests a third level; include only recurses two levels deep — a narrowed/filtered relation, then a plain fetch of its own relations`,
+        { meta: { field: `${outerKey}.${name}` } },
+      );
+    }
+    if (value) names.push(name);
+  }
+  return names.map((name) => field(name));
+}
+
+/**
+ * Compiles one narrowed/filtered `include` entry into a projection: a
+ * correlated subquery over `$parent.<key>`, aliased back to `key` so it
+ * lands in the result under the same name a plain `FETCH` would have used.
+ *
+ * A fresh, key-prefixed `ParamAllocator` keeps this subquery's bound
+ * parameter names from colliding with the enclosing statement's `$pN` names
+ * or with a sibling include's own subquery.
+ */
+function compileIncludeSubquery(
+  key: string,
+  relation: RelationFieldKind,
+  value: IncludeObject,
+): Projection {
+  if (relation === 'to-one' && value.where !== undefined) {
+    throw structuredError(
+      'RUNTIME.INCLUDE_WHERE_ON_TO_ONE',
+      `include on "${key}" cannot use "where": "${key}" is a to-one relation, so there is no set of linked records to filter — filter the parent row instead, or drop "where" and use a plain boolean/select include`,
+      { meta: { field: key, relation } },
+    );
+  }
+
+  const params = new ParamAllocator(`${key}_p`);
+  const where = compileWhere(value.where, params);
+  const fetch = nestedFetchNames(key, value.include);
+
+  const statement: SurrealStatement = {
+    kind: 'select',
+    projections: projectionsForSelect(value.select),
+    from: [{ kind: 'expr', expr: parentField(key) }],
+    ...(relation === 'to-one' ? { only: true } : {}),
+    ...(where === undefined ? {} : { where }),
+    ...(fetch.length === 0 ? {} : { fetch }),
+  };
+
+  return { expr: { kind: 'subquery', statement }, alias: key };
+}
+
+/** What `compileInclude` resolves an `include` object into: names to `FETCH` plainly, and projections for the narrowed/filtered rest. */
+interface CompiledInclude {
+  readonly fetchNames: readonly string[];
+  readonly projections: readonly Projection[];
+}
+
+const NO_INCLUDE: CompiledInclude = { fetchNames: [], projections: [] };
+
+/**
+ * Resolves a top-level `include` into `FETCH` names and subquery
+ * projections.
+ *
+ * `fields` is this table's declared field list, when known. Without it, a
+ * boolean include still compiles (`FETCH` never needed to classify the
+ * relation), but a narrowed/filtered object cannot: there is nothing here to
+ * tell a to-one link apart from a to-many one, which `select`'s projection
+ * shape and `where`'s availability both depend on.
+ */
+function compileInclude(
+  include: IncludeInput | undefined,
+  fields: ReadonlyArray<SurrealField> | undefined,
+): CompiledInclude {
+  if (include === undefined) return NO_INCLUDE;
+
+  const fetchNames: string[] = [];
+  const projections: Projection[] = [];
+
+  for (const [key, value] of Object.entries(include)) {
+    if (value === undefined || value === false) continue;
+
+    const relation = fields === undefined ? undefined : assertKnownIncludeKey(key, fields);
+
+    if (value === true) {
+      fetchNames.push(key);
+      continue;
+    }
+
+    if (relation === undefined) {
+      throw structuredError(
+        'RUNTIME.INCLUDE_RELATION_UNCLASSIFIED',
+        `include on "${key}" uses "select" or "where", which needs to know whether "${key}" is a to-one or to-many relation; this table's field list is not available here, so only a plain boolean include (fetch) is supported without it`,
+        { meta: { field: key } },
+      );
+    }
+
+    projections.push(compileIncludeSubquery(key, relation, value));
+  }
+
+  return { fetchNames, projections };
+}
+
 function contentOf(data: Readonly<Record<string, unknown>>, params: ParamAllocator): SurrealExpr {
   const entries: Record<string, SurrealExpr> = {};
   for (const [name, value] of Object.entries(data)) {
@@ -452,12 +664,16 @@ export class SurrealCollection<Row = Record<string, unknown>, TFieldNames extend
     const params = new ParamAllocator();
     const where = compileWhere(args.where, params, this.#fields);
     const order = orderTerms(args.orderBy);
-    const fetch = (args.fetch ?? []).map((name) => field(name));
+    const included = compileInclude(args.include, this.#fields);
+    const fetch = [...new Set([...(args.fetch ?? []), ...included.fetchNames])].map((name) =>
+      field(name),
+    );
+    const projections = [...selectFor(args), ...included.projections];
     return plan<Row>(
       [
         {
           kind: 'select',
-          projections: selectFor(args),
+          projections,
           from: [{ kind: 'table', name: this.#table }],
           ...(where === undefined ? {} : { where }),
           ...(order.length === 0 ? {} : { orderBy: order }),
@@ -496,21 +712,25 @@ export class SurrealCollection<Row = Record<string, unknown>, TFieldNames extend
   }
 
   /** `findMany` capped at one row. */
-  findFirst(args: Omit<FindManyArgs, 'limit'> = {}): SurrealQueryPlan<Row> {
+  findFirst(args: Omit<FindManyArgs<TFieldNames>, 'limit'> = {}): SurrealQueryPlan<Row> {
     return this.findMany({ ...args, limit: 1 });
   }
 
   /** Reads one record by id, using `FROM ONLY` so SurrealDB returns a record. */
   findUnique(
     id: RecordKeyInput,
-    args: Pick<FindManyArgs, 'select' | 'fetch'> = {},
+    args: Pick<FindManyArgs, 'select' | 'fetch' | 'include'> = {},
   ): SurrealQueryPlan<Row> {
-    const fetch = (args.fetch ?? []).map((name) => field(name));
+    const included = compileInclude(args.include, this.#fields);
+    const fetch = [...new Set([...(args.fetch ?? []), ...included.fetchNames])].map((name) =>
+      field(name),
+    );
+    const projections = [...selectFor(args), ...included.projections];
     return plan<Row>(
       [
         {
           kind: 'select',
-          projections: selectFor(args),
+          projections,
           from: [targetFor(this.#table, id)],
           only: true,
           ...(fetch.length === 0 ? {} : { fetch }),

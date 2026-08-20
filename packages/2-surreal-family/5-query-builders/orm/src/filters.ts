@@ -133,12 +133,24 @@ const CASE_FOLDABLE_OPERATORS: ReadonlySet<keyof FieldFilter> = new Set([
 
 const FIELD_FILTER_KEYS: ReadonlySet<string> = new Set([...FIELD_FILTER_OPERATORS, 'mode']);
 
-/** Allocates stable `$p0`, `$p1`, … names across one compiled statement. */
+/**
+ * Allocates stable `$p0`, `$p1`, … names across one compiled statement.
+ *
+ * A caller compiling a correlated subquery (an `include`d relation's own
+ * `where`, most notably) passes a distinct `prefix` so its `$<prefix>N`
+ * names cannot collide with the enclosing statement's `$pN` names — the two
+ * allocators never share a counter.
+ */
 export class ParamAllocator {
   #next = 0;
+  readonly #prefix: string;
+
+  constructor(prefix = 'p') {
+    this.#prefix = prefix;
+  }
 
   bind(value: unknown): SurrealExpr {
-    const name = `p${this.#next}`;
+    const name = `${this.#prefix}${this.#next}`;
     this.#next += 1;
     return param(name, value);
   }
@@ -369,7 +381,7 @@ export function compileWhere(
   return terms.length === 1 ? terms[0] : and(...terms);
 }
 
-type RelationFieldKind = 'to-one' | 'to-many';
+export type RelationFieldKind = 'to-one' | 'to-many';
 
 /**
  * Whether a declared field is a relation `where` may filter through: a
@@ -377,7 +389,7 @@ type RelationFieldKind = 'to-one' | 'to-many';
  * else — scalars, geometry, `either`, `literal`, `references` — is `undefined`,
  * which keeps this table's key compiling as a plain field term.
  */
-function classifyRelationField(
+export function classifyRelationField(
   key: string,
   fields: ReadonlyArray<SurrealField>,
 ): RelationFieldKind | undefined {
@@ -386,7 +398,7 @@ function classifyRelationField(
   return classifyRelationFieldType(unwrapOptional(declared.type));
 }
 
-function classifyRelationFieldType(type: SurrealFieldType): RelationFieldKind | undefined {
+export function classifyRelationFieldType(type: SurrealFieldType): RelationFieldKind | undefined {
   if (type.kind === 'record') return 'to-one';
   if (type.kind === 'array' || type.kind === 'set') {
     return unwrapOptional(type.of).kind === 'record' ? 'to-many' : undefined;

@@ -446,6 +446,62 @@ describe.skipIf(!available)('relation filters against a live SurrealDB', () => {
       expect(rows.map((row) => row.name).sort()).toEqual(['grace', 'linus', 'zoe']);
     });
   });
+
+  describe('include', () => {
+    const personWithOrg = new SurrealCollection<{
+      id: unknown;
+      name: string;
+      org: { id: unknown; tier: string } | null;
+    }>('person', 'sh', undefined, undefined, personFields);
+
+    const personWithPosts = new SurrealCollection<{
+      id: unknown;
+      name: string;
+      posts: ReadonlyArray<{ id: unknown; title: string }>;
+    }>('person', 'sh', undefined, undefined, personFields);
+
+    it('a boolean include returns the linked record in place of its id', async () => {
+      const rows = await run(
+        personWithOrg.findMany({ where: { name: 'ada' }, include: { org: true } }),
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.org).toMatchObject({ tier: 'gold' });
+    });
+
+    it('a narrowed select on a to-one include overrides the field with only the named projection', async () => {
+      const rows = await run(
+        personWithOrg.findMany({
+          where: { name: 'ada' },
+          include: { org: { select: { tier: true } } },
+        }),
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.org).toEqual({ tier: 'gold' });
+    });
+
+    it('a filtered to-many include narrows the linked rows without dropping the parent', async () => {
+      const rows = await run(
+        personWithPosts.findMany({
+          where: { name: 'ada' },
+          include: { posts: { where: { title: 'alpha' } } },
+        }),
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.posts.map((post) => post.title)).toEqual(['alpha']);
+    });
+
+    it('a filtered to-many include can empty the linked rows while the parent still comes back', async () => {
+      const rows = await run(
+        personWithPosts.findMany({
+          where: { name: 'ada' },
+          include: { posts: { where: { title: 'nonexistent' } } },
+        }),
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.name).toBe('ada');
+      expect(rows[0]?.posts).toEqual([]);
+    });
+  });
 });
 
 describe.skipIf(!available)('string filter operators against a live SurrealDB', () => {
