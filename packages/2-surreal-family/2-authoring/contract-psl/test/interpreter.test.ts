@@ -5,6 +5,7 @@ import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { SurrealContractSchema } from '@internal/surreal-contract';
 import { defineContract, index as indexOf, t } from '@internal/surreal-contract-ts';
+import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import {
   type InterpretPslDocumentToSurrealContractInput,
@@ -646,7 +647,7 @@ model User {
       `);
 
       const validated = SurrealContractSchema(ir);
-      expect((validated as { errors?: unknown }).errors).toBeUndefined();
+      expect(validated).not.toBeInstanceOf(type.errors);
       expect(validated).toEqual(ir);
     });
   });
