@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SurrealStorageShape } from '@internal/surreal-contract/types';
 import { describe, expectTypeOf, it } from 'vitest';
+import type { SurrealCollection } from '../src/collection';
 import type { SurrealOrm } from '../src/orm';
 
 /**
@@ -64,6 +65,7 @@ describe('typed where keys', () => {
   });
 
   it('keeps contracts without literal model detail open', () => {
-    expectTypeOf(openOrm['person']).not.toBeUndefined();
+    expectTypeOf(openOrm['person']).toEqualTypeOf<SurrealCollection | undefined>();
+    expectTypeOf(openOrm['anything']).toEqualTypeOf<SurrealCollection | undefined>();
   });
 });

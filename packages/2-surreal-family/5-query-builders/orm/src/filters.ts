@@ -597,6 +597,13 @@ function compileFieldTerms(
     if (STRING_ONLY_OPERATORS.has(operator)) assertStringOperandField(path, operator, fields);
     terms.push(comparison(path, operator, operand, params, insensitive));
   }
+  if (terms.length === 0) {
+    throw structuredError(
+      'RUNTIME.FILTER_VALUE_INVALID',
+      `where clause value for "${path}" carries no comparison operator; a filter object must set at least one of ${FIELD_FILTER_OPERATORS.join(', ')}`,
+      { meta: { field: path } },
+    );
+  }
   return terms;
 }
 

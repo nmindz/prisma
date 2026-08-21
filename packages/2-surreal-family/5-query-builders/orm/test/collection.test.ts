@@ -1080,6 +1080,20 @@ describe('where input guards', () => {
         /filter values must be plain data/,
       );
     });
+
+    it('rejects a filter object whose only key is mode, since it carries no comparison operator', () => {
+      const untyped = new SurrealCollection('post', 'sh');
+      expect(() => untyped.findMany({ where: { title: { mode: 'insensitive' } } })).toThrow(
+        /carries no comparison operator/,
+      );
+    });
+
+    it('still compiles equals alongside mode', () => {
+      const untyped = new SurrealCollection('post', 'sh');
+      expect(
+        surql(untyped.findMany({ where: { title: { equals: 'x', mode: 'insensitive' } } })).surql,
+      ).toBe('SELECT * FROM `post` WHERE string::lowercase(`title`) = string::lowercase($p0)');
+    });
   });
 
   describe('key guards', () => {
