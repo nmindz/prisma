@@ -3,6 +3,7 @@ export {
   StorageAnalyzerSchema,
   StorageFieldSchema,
   StorageIndexSchema,
+  StorageSequenceSchema,
   StorageTableSchema,
   SurrealContractSchema,
 } from '../contract-schema';
@@ -12,7 +13,12 @@ export {
   defaultSurrealDomainNamespaceId,
   defaultSurrealStorageNamespaceId,
 } from '../default-namespace';
-export { analyzerEntityKind, composeSurrealEntityKinds, tableEntityKind } from '../entity-kinds';
+export {
+  analyzerEntityKind,
+  composeSurrealEntityKinds,
+  sequenceEntityKind,
+  tableEntityKind,
+} from '../entity-kinds';
 export { escapeStringLiteral, isBareIdentifier, quoteIdentifier } from '../identifiers';
 export { buildSurrealNamespace } from '../ir/build-surreal-namespace';
 export type { SurrealAnalyzerInput } from '../ir/surreal-analyzer';
@@ -21,6 +27,8 @@ export type { SurrealFieldInput } from '../ir/surreal-field';
 export { SurrealField } from '../ir/surreal-field';
 export type { SurrealIndexInput } from '../ir/surreal-index';
 export { SurrealIndex } from '../ir/surreal-index';
+export type { SurrealSequenceInput } from '../ir/surreal-sequence';
+export { SurrealSequence } from '../ir/surreal-sequence';
 export type {
   SurrealNamespace,
   SurrealNamespaceEntries,

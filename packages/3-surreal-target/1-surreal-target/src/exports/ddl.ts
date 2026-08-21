@@ -4,9 +4,11 @@ export {
   renderDefineAnalyzer,
   renderDefineField,
   renderDefineIndex,
+  renderDefineSequence,
   renderDefineTable,
   renderRemoveAnalyzer,
   renderRemoveField,
   renderRemoveIndex,
+  renderRemoveSequence,
   renderRemoveTable,
 } from '../core/ddl';

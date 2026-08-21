@@ -163,6 +163,13 @@ export const StorageAnalyzerSchema = type({
   'comment?': 'string',
 });
 
+export const StorageSequenceSchema = type({
+  '+': 'reject',
+  'batch?': 'number',
+  'start?': 'number',
+  'timeout?': 'string',
+});
+
 const ScalarFieldTypeSchema = type({
   '+': 'reject',
   kind: "'scalar'",
@@ -223,6 +230,7 @@ function createSurrealNamespaceEnvelopeSchema(
         '+': 'reject',
         'table?': type({ '[string]': StorageTableSchema }),
         'analyzer?': type({ '[string]': StorageAnalyzerSchema }),
+        'sequence?': type({ '[string]': StorageSequenceSchema }),
         ...extraEntries,
       }),
     }),

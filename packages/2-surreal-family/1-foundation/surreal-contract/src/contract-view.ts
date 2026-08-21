@@ -7,7 +7,7 @@ import {
 } from '@internal/framework-components/ir';
 import type { SurrealContract } from './contract-types';
 
-const SURREAL_BUILTIN_KINDS = ['table', 'analyzer'] as const;
+const SURREAL_BUILTIN_KINDS = ['table', 'analyzer', 'sequence'] as const;
 type SurrealBuiltinKind = (typeof SURREAL_BUILTIN_KINDS)[number];
 
 type SurrealEntries<TContract extends SurrealContract> = DefaultNamespaceEntries<
@@ -15,7 +15,7 @@ type SurrealEntries<TContract extends SurrealContract> = DefaultNamespaceEntries
 >;
 
 /**
- * The SurrealDB accessors: the two built-in kinds promoted to top-level
+ * The SurrealDB accessors: the built-in kinds promoted to top-level
  * accessors, pack-contributed kinds under `entries` (singular keys).
  */
 export type SurrealContractAccessors<TContract extends SurrealContract> = SingleNamespaceView<

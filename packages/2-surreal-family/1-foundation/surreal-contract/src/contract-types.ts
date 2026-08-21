@@ -1,6 +1,7 @@
 import type { Contract, ContractModel, StorageBase } from '@internal/contract/types';
 import type { Namespace, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SurrealAnalyzer } from './ir/surreal-analyzer';
+import type { SurrealSequence } from './ir/surreal-sequence';
 import type { SurrealTable } from './ir/surreal-table';
 
 /**
@@ -17,9 +18,11 @@ export type SurrealModelStorage = {
 
 export type SurrealModelDefinition = ContractModel<SurrealModelStorage>;
 
+// Hand-written duplicate: ir/surreal-storage.ts's SurrealNamespaceEntries mirrors this shape; keep both in sync.
 type SurrealNamespaceEntriesShape = Readonly<Record<string, Readonly<Record<string, unknown>>>> & {
   readonly table?: Readonly<Record<string, SurrealTable>>;
   readonly analyzer?: Readonly<Record<string, SurrealAnalyzer>>;
+  readonly sequence?: Readonly<Record<string, SurrealSequence>>;
 };
 
 /**

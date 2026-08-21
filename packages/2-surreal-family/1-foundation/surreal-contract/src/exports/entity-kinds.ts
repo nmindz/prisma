@@ -1,1 +1,6 @@
-export { analyzerEntityKind, composeSurrealEntityKinds, tableEntityKind } from '../entity-kinds';
+export {
+  analyzerEntityKind,
+  composeSurrealEntityKinds,
+  sequenceEntityKind,
+  tableEntityKind,
+} from '../entity-kinds';

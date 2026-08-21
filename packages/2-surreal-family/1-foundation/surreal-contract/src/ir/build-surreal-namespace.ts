@@ -7,6 +7,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { composeSurrealEntityKinds } from '../entity-kinds';
 import type { SurrealAnalyzer } from './surreal-analyzer';
+import type { SurrealSequence } from './surreal-sequence';
 import type {
   SurrealNamespace,
   SurrealNamespaceEntries,
@@ -44,7 +45,7 @@ class SurrealBoundNamespace extends NamespaceBase {
     this.entries = Object.freeze(
       blindCast<
         SurrealNamespaceEntries,
-        'composeSurrealEntityKinds() supplies the table→SurrealTable and analyzer→SurrealAnalyzer descriptors, so this open-dict result holds the typed members SurrealNamespaceEntries declares; the descriptor Map erases those per-kind Node types from the return.'
+        'composeSurrealEntityKinds() supplies the table→SurrealTable, analyzer→SurrealAnalyzer, and sequence→SurrealSequence descriptors, so this open-dict result holds the typed members SurrealNamespaceEntries declares; the descriptor Map erases those per-kind Node types from the return.'
       >(hydrateNamespaceEntities(rawEntries, composeSurrealEntityKinds(), 'carry')),
     );
     Object.defineProperty(this, 'kind', {
@@ -62,6 +63,10 @@ class SurrealBoundNamespace extends NamespaceBase {
 
   get analyzer(): Readonly<Record<string, SurrealAnalyzer>> {
     return this.entries.analyzer ?? Object.freeze({});
+  }
+
+  get sequence(): Readonly<Record<string, SurrealSequence>> {
+    return this.entries.sequence ?? Object.freeze({});
   }
 }
 

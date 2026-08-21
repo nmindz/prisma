@@ -4,6 +4,7 @@ export type {
   ContractDefinition,
   FieldDefinition,
   IndexDefinition,
+  SequenceDefinition,
   TableDefinition,
 } from '../define-contract';
 export { defineContract } from '../define-contract';

@@ -6,13 +6,16 @@ import {
   type Storage,
 } from '@internal/framework-components/ir';
 import type { SurrealAnalyzer, SurrealAnalyzerInput } from './surreal-analyzer';
+import type { SurrealSequence, SurrealSequenceInput } from './surreal-sequence';
 import type { SurrealTable, SurrealTableInput } from './surreal-table';
 
+// Hand-written duplicate: contract-types.ts's SurrealNamespaceEntriesShape mirrors this shape; keep both in sync.
 export type SurrealNamespaceEntries = Readonly<
   Record<string, Readonly<Record<string, unknown>>>
 > & {
   readonly table?: Readonly<Record<string, SurrealTable>>;
   readonly analyzer?: Readonly<Record<string, SurrealAnalyzer>>;
+  readonly sequence?: Readonly<Record<string, SurrealSequence>>;
 };
 
 export interface SurrealNamespaceTablesInput {
@@ -20,6 +23,7 @@ export interface SurrealNamespaceTablesInput {
   readonly entries: Readonly<Record<string, Readonly<Record<string, unknown>>>> & {
     readonly table?: Readonly<Record<string, SurrealTableInput>>;
     readonly analyzer?: Readonly<Record<string, SurrealAnalyzerInput>>;
+    readonly sequence?: Readonly<Record<string, SurrealSequenceInput>>;
   };
 }
 

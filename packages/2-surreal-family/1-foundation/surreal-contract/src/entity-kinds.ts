@@ -3,8 +3,13 @@ import type {
   EntityKindDescriptor,
 } from '@internal/framework-components/ir';
 import { structuredError } from '@internal/utils/structured-error';
-import { StorageAnalyzerSchema, StorageTableSchema } from './contract-schema';
+import {
+  StorageAnalyzerSchema,
+  StorageSequenceSchema,
+  StorageTableSchema,
+} from './contract-schema';
 import { SurrealAnalyzer, type SurrealAnalyzerInput } from './ir/surreal-analyzer';
+import { SurrealSequence, type SurrealSequenceInput } from './ir/surreal-sequence';
 import { SurrealTable, type SurrealTableInput } from './ir/surreal-table';
 
 export const tableEntityKind: EntityKindDescriptor<SurrealTableInput, SurrealTable> = {
@@ -19,9 +24,15 @@ export const analyzerEntityKind: EntityKindDescriptor<SurrealAnalyzerInput, Surr
   construct: (input) => new SurrealAnalyzer(input),
 };
 
+export const sequenceEntityKind: EntityKindDescriptor<SurrealSequenceInput, SurrealSequence> = {
+  kind: 'sequence',
+  schema: StorageSequenceSchema,
+  construct: (input) => new SurrealSequence(input),
+};
+
 /**
  * Assembles the `kind → descriptor` registry for SurrealDB namespaces: the
- * two built-in kinds plus any target `packKinds`. This builds the lookup
+ * built-in kinds plus any target `packKinds`. This builds the lookup
  * table — it does not touch contract data. `hydrateNamespaceEntities` later
  * consumes the registry to turn a namespace's raw entries into IR instances.
  * Throws on a duplicate kind.
@@ -32,6 +43,7 @@ export function composeSurrealEntityKinds(
   const kinds = new Map<string, AnyEntityKindDescriptor>([
     ['table', tableEntityKind],
     ['analyzer', analyzerEntityKind],
+    ['sequence', sequenceEntityKind],
   ]);
   for (const descriptor of packKinds) {
     if (kinds.has(descriptor.kind)) {

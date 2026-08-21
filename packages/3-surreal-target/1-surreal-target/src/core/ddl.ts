@@ -5,6 +5,7 @@ import {
   type SurrealAnalyzer,
   type SurrealField,
   type SurrealIndex,
+  type SurrealSequence,
   type SurrealTable,
 } from '@internal/surreal-contract';
 import type {
@@ -214,6 +215,22 @@ export function renderDefineAnalyzer(
   ]);
 }
 
+/** `DEFINE SEQUENCE` — a named, persisted counter used to generate ids. */
+export function renderDefineSequence(
+  name: string,
+  sequence: SurrealSequence,
+  mode?: DefineMode,
+): string {
+  return join([
+    'DEFINE SEQUENCE',
+    modeKeyword(mode),
+    quoteIdentifier(name),
+    sequence.batch === undefined ? '' : `BATCH ${sequence.batch}`,
+    sequence.start === undefined ? '' : `START ${sequence.start}`,
+    sequence.timeout === undefined ? '' : `TIMEOUT ${sequence.timeout}`,
+  ]);
+}
+
 export function renderRemoveTable(name: string, ifExists = true): string {
   return `REMOVE TABLE ${ifExists ? 'IF EXISTS ' : ''}${quoteIdentifier(name)}`;
 }
@@ -229,6 +246,10 @@ export function renderRemoveIndex(tableName: string, indexName: string, ifExists
 
 export function renderRemoveAnalyzer(name: string, ifExists = true): string {
   return `REMOVE ANALYZER ${ifExists ? 'IF EXISTS ' : ''}${quoteIdentifier(name)}`;
+}
+
+export function renderRemoveSequence(name: string, ifExists = true): string {
+  return `REMOVE SEQUENCE ${ifExists ? 'IF EXISTS ' : ''}${quoteIdentifier(name)}`;
 }
 
 /**

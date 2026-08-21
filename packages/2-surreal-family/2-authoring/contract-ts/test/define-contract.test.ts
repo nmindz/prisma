@@ -174,6 +174,47 @@ describe('defineContract', () => {
       }),
     ).toThrow(/exactly one vector field/);
   });
+
+  it('carries sequences when the contract declares them', () => {
+    const contract = defineContract({
+      tables: { person: {} },
+      sequences: { order_id: { batch: 10, start: 1000, timeout: '5s' } },
+    });
+    expect(
+      contract.storage.namespaces['__unbound__']?.entries.sequence?.['order_id'],
+    ).toMatchObject({ batch: 10, start: 1000, timeout: '5s' });
+  });
+
+  it('gives the same storage hash whether or not sequences are declared', () => {
+    const withoutSequences = defineContract({ tables: { person: {} } });
+    const withEmptySequences = defineContract({ tables: { person: {} }, sequences: {} });
+    expect(withEmptySequences.storage.storageHash).toBe(withoutSequences.storage.storageHash);
+  });
+
+  it('builds entries for every combination of analyzers and sequences', () => {
+    const neither = defineContract({ tables: { person: {} } });
+    const analyzerOnly = defineContract({
+      tables: { person: {} },
+      analyzers: { english: { tokenizers: ['blank'] } },
+    });
+    const sequenceOnly = defineContract({
+      tables: { person: {} },
+      sequences: { order_id: {} },
+    });
+    const both = defineContract({
+      tables: { person: {} },
+      analyzers: { english: { tokenizers: ['blank'] } },
+      sequences: { order_id: {} },
+    });
+
+    const entryKeys = (contract: typeof neither) =>
+      Object.keys(contract.storage.namespaces['__unbound__']?.entries ?? {}).sort();
+
+    expect(entryKeys(neither)).toEqual(['table']);
+    expect(entryKeys(analyzerOnly)).toEqual(['analyzer', 'table']);
+    expect(entryKeys(sequenceOnly)).toEqual(['sequence', 'table']);
+    expect(entryKeys(both)).toEqual(['analyzer', 'sequence', 'table']);
+  });
 });
 
 describe('type constructors', () => {

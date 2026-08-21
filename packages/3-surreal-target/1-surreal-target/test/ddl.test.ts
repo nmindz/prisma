@@ -2,6 +2,7 @@ import {
   SurrealAnalyzer,
   SurrealField,
   SurrealIndex,
+  SurrealSequence,
   SurrealTable,
 } from '@internal/surreal-contract';
 import { describe, expect, it } from 'vitest';
@@ -10,10 +11,12 @@ import {
   renderDefineAnalyzer,
   renderDefineField,
   renderDefineIndex,
+  renderDefineSequence,
   renderDefineTable,
   renderRemoveAnalyzer,
   renderRemoveField,
   renderRemoveIndex,
+  renderRemoveSequence,
   renderRemoveTable,
 } from '../src/exports/ddl';
 
@@ -299,6 +302,50 @@ describe('renderDefineAnalyzer', () => {
   });
 });
 
+describe('renderDefineSequence', () => {
+  it('renders the bare form', () => {
+    expect(renderDefineSequence('userIds', new SurrealSequence({}))).toBe(
+      'DEFINE SEQUENCE `userIds`',
+    );
+  });
+
+  it('renders the batch clause alone', () => {
+    expect(renderDefineSequence('userIds', new SurrealSequence({ batch: 1000 }))).toBe(
+      'DEFINE SEQUENCE `userIds` BATCH 1000',
+    );
+  });
+
+  it('renders the start clause alone', () => {
+    expect(renderDefineSequence('userIds', new SurrealSequence({ start: 100 }))).toBe(
+      'DEFINE SEQUENCE `userIds` START 100',
+    );
+  });
+
+  it('renders the timeout clause alone', () => {
+    expect(renderDefineSequence('userIds', new SurrealSequence({ timeout: '5s' }))).toBe(
+      'DEFINE SEQUENCE `userIds` TIMEOUT 5s',
+    );
+  });
+
+  it('orders batch, then start, then timeout when all three are set', () => {
+    expect(
+      renderDefineSequence(
+        'userIds',
+        new SurrealSequence({ batch: 1000, start: 1, timeout: '5s' }),
+      ),
+    ).toBe('DEFINE SEQUENCE `userIds` BATCH 1000 START 1 TIMEOUT 5s');
+  });
+
+  it('renders the OVERWRITE and IF NOT EXISTS modes', () => {
+    expect(renderDefineSequence('userIds', new SurrealSequence({ batch: 1000 }), 'overwrite')).toBe(
+      'DEFINE SEQUENCE OVERWRITE `userIds` BATCH 1000',
+    );
+    expect(
+      renderDefineSequence('userIds', new SurrealSequence({ batch: 1000 }), 'if-not-exists'),
+    ).toBe('DEFINE SEQUENCE IF NOT EXISTS `userIds` BATCH 1000');
+  });
+});
+
 describe('renderCreateTableStatements', () => {
   it('orders the table before its fields and its fields before its indexes', () => {
     const table = new SurrealTable({
@@ -321,9 +368,11 @@ describe('remove statements', () => {
     );
     expect(renderRemoveIndex('person', 'uq')).toBe('REMOVE INDEX IF EXISTS `uq` ON TABLE `person`');
     expect(renderRemoveAnalyzer('english')).toBe('REMOVE ANALYZER IF EXISTS `english`');
+    expect(renderRemoveSequence('userIds')).toBe('REMOVE SEQUENCE IF EXISTS `userIds`');
   });
 
   it('drop the guard when the caller wants the failure', () => {
     expect(renderRemoveTable('person', false)).toBe('REMOVE TABLE `person`');
+    expect(renderRemoveSequence('userIds', false)).toBe('REMOVE SEQUENCE `userIds`');
   });
 });

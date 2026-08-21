@@ -187,9 +187,9 @@ describe('validateSurrealTables', () => {
 });
 
 describe('composeSurrealEntityKinds', () => {
-  it('ships the table and analyzer kinds', () => {
+  it('ships the table, analyzer, and sequence kinds', () => {
     const kinds = composeSurrealEntityKinds();
-    expect([...kinds.keys()].sort()).toEqual(['analyzer', 'table']);
+    expect([...kinds.keys()].sort()).toEqual(['analyzer', 'sequence', 'table']);
   });
 
   it('rejects a pack kind that collides with a built-in', () => {

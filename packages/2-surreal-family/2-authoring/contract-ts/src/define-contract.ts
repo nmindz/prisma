@@ -5,6 +5,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type {
   SurrealAnalyzerInput,
   SurrealNamespaceTablesInput,
+  SurrealSequenceInput,
   SurrealTableInput,
 } from '@internal/surreal-contract';
 import { buildSurrealNamespace, validateSurrealTables } from '@internal/surreal-contract';
@@ -55,9 +56,16 @@ export interface AnalyzerDefinition {
   readonly filters?: readonly string[];
 }
 
+export interface SequenceDefinition {
+  readonly batch?: number;
+  readonly start?: number;
+  readonly timeout?: string;
+}
+
 export interface ContractDefinition {
   readonly tables: Readonly<Record<string, TableDefinition>>;
   readonly analyzers?: Readonly<Record<string, AnalyzerDefinition>>;
+  readonly sequences?: Readonly<Record<string, SequenceDefinition>>;
 }
 
 /**
@@ -124,7 +132,20 @@ function storageEntries(definition: ContractDefinition): SurrealNamespaceTablesI
     };
   }
 
-  return Object.keys(analyzer).length === 0 ? { table } : { table, analyzer };
+  const sequence: Record<string, SurrealSequenceInput> = {};
+  for (const [name, spec] of Object.entries(definition.sequences ?? {})) {
+    sequence[name] = {
+      ...(spec.batch === undefined ? {} : { batch: spec.batch }),
+      ...(spec.start === undefined ? {} : { start: spec.start }),
+      ...(spec.timeout === undefined ? {} : { timeout: spec.timeout }),
+    };
+  }
+
+  return {
+    table,
+    ...(Object.keys(analyzer).length === 0 ? {} : { analyzer }),
+    ...(Object.keys(sequence).length === 0 ? {} : { sequence }),
+  };
 }
 
 /**
