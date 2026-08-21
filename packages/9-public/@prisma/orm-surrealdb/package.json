@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsdown",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen"
+    "clean": "rm -rf dist src-gen",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/orm-family-surreal": "workspace:8.0.0-rc.14",
@@ -22,10 +23,12 @@
   },
   "devDependencies": {
     "@internal/extension-surrealdb": "workspace:8.0.0-rc.14",
+    "@internal/publish-surface": "workspace:8.0.0-rc.14",
     "@repo/tsconfig": "workspace:8.0.0-rc.14",
     "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "typescript": ">=5.9"
@@ -85,6 +88,7 @@
     "./migration-tools/io": "./dist/migration-tools__io.mjs",
     "./migration-tools/spaces": "./dist/migration-tools__spaces.mjs",
     "./orm": "./dist/orm.mjs",
+    "./orm-client": "./dist/orm-client.mjs",
     "./query-ast": "./dist/query-ast.mjs",
     "./query-ast/plan": "./dist/query-ast__plan.mjs",
     "./query-builder": "./dist/query-builder.mjs",
@@ -114,6 +118,8 @@
     "./utils/result": "./dist/utils__result.mjs",
     "./utils/simplify-deep": "./dist/utils__simplify-deep.mjs",
     "./utils/structured-error": "./dist/utils__structured-error.mjs",
+    "./utils/suppress-idle-connection-errors": "./dist/utils__suppress-idle-connection-errors.mjs",
+    "./utils/text": "./dist/utils__text.mjs",
     "./utils/types": "./dist/utils__types.mjs",
     "./value": "./dist/value.mjs",
     "./vite-plugin-contract-emit": "./dist/vite-plugin-contract-emit.mjs",

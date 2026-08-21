@@ -35,6 +35,7 @@ const RETIREMENT_PROOFS = new Set([
   'packages/1-framework/3-tooling/migration/test/next-actions.test.ts',
   'test/integration/test/packaging/facade-tarball.test.ts',
   'packages/9-public/@prisma/orm-target-postgres/test/cross-shell-tarball.test.ts',
+  'packages/9-public/@prisma/orm-surrealdb/test/facade-tarball.test.ts',
   'test/integration/test/cli.init-skill-distribution.integration.test.ts',
 ]);
 

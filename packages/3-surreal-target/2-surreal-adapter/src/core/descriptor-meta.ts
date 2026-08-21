@@ -4,5 +4,16 @@ export const surrealAdapterDescriptorMeta = {
   targetId: 'surrealdb',
   id: 'surrealdb',
   version: '0.0.1',
-  capabilities: {},
+  capabilities: {
+    surrealdb: {
+      createReturnsRecord: true,
+      upsertByRecordId: true,
+      referenceOnDelete: true,
+      graphEdges: true,
+      sequences: true,
+    },
+    surreal: {
+      upsertByUniqueIndex: true,
+    },
+  },
 } as const;

@@ -271,6 +271,7 @@ const SQL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
 const SURREAL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
   { package: '@internal/surreal-contract-ts', entry: 'contract-ts' },
   { package: '@internal/surreal-orm', entry: 'orm' },
+  { package: '@internal/surreal-orm-client', entry: 'orm-client' },
   { package: '@internal/surreal-query-builder', entry: 'query-builder' },
   { package: '@internal/surreal-query-ast', entry: 'query-ast' },
   { package: '@internal/surreal-lowering', entry: 'lowering' },
@@ -562,6 +563,14 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           dir: 'packages/2-surreal-family/9-family',
           name: '@internal/family-surreal',
           entry: 'family',
+        },
+        // Platform code despite its `3-extensions/` directory: the facade
+        // depends on it, and one module may live in only one published
+        // package, so it cannot be duplicated into the facade.
+        {
+          dir: 'packages/3-extensions/surreal-orm-client',
+          name: '@internal/surreal-orm-client',
+          entry: 'orm-client',
         },
       ],
     },
