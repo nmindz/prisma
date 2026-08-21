@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SurrealStorageShape } from '@internal/surreal-contract/types';
+import type { SurrealQueryPlan } from '@internal/surreal-query-ast/plan';
 import { describe, expectTypeOf, it } from 'vitest';
 import type { SurrealCollection } from '../src/collection';
 import type { SurrealOrm } from '../src/orm';
@@ -38,6 +39,7 @@ type OpenContract = Contract<SurrealStorageShape>;
 
 declare const typedOrm: SurrealOrm<TypedTestContract>;
 declare const openOrm: SurrealOrm<OpenContract>;
+declare const graphCollection: SurrealCollection;
 
 describe('typed where keys', () => {
   it('accepts declared fields, relations, id, and combinators', () => {
@@ -67,5 +69,19 @@ describe('typed where keys', () => {
   it('keeps contracts without literal model detail open', () => {
     expectTypeOf(openOrm['person']).toEqualTypeOf<SurrealCollection | undefined>();
     expectTypeOf(openOrm['anything']).toEqualTypeOf<SurrealCollection | undefined>();
+  });
+});
+
+describe('traverse return shape', () => {
+  it('types a plain hop as { related: unknown }', () => {
+    expectTypeOf(graphCollection.traverse({ from: 'person:a', edge: 'follows' })).toEqualTypeOf<
+      SurrealQueryPlan<{ related: unknown }>
+    >();
+  });
+
+  it('types a selected hop by the selected field names, not `related`', () => {
+    expectTypeOf(
+      graphCollection.traverse({ from: 'person:a', edge: 'follows', select: ['name'] }),
+    ).toEqualTypeOf<SurrealQueryPlan<{ name: unknown }>>();
   });
 });

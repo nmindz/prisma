@@ -483,6 +483,12 @@ describe('mutations', () => {
     expect(lowered.surql).toBe('CREATE `person` CONTENT { `name`: $p0 } RETURN AFTER');
   });
 
+  it('projects selected fields instead of the whole written record', () => {
+    expect(
+      surql(person.create({ data: { name: 'ada', age: 36 }, select: { name: true } })).surql,
+    ).toBe('CREATE `person` CONTENT { `name`: $p0, `age`: $p1 } RETURN `name`');
+  });
+
   it('replaces with CONTENT and merges with MERGE', () => {
     expect(surql(person.update({ id: 'ada', data: { age: 37 } })).surql).toBe(
       'UPDATE `person`:`ada` CONTENT { `age`: $p0 } RETURN AFTER',
@@ -490,6 +496,12 @@ describe('mutations', () => {
     expect(surql(person.update({ id: 'ada', data: { age: 37 }, merge: true })).surql).toBe(
       'UPDATE `person`:`ada` MERGE { `age`: $p0 } RETURN AFTER',
     );
+  });
+
+  it('projects selected fields instead of the whole updated record', () => {
+    expect(
+      surql(person.update({ id: 'ada', data: { age: 37 }, select: { age: true } })).surql,
+    ).toBe('UPDATE `person`:`ada` CONTENT { `age`: $p0 } RETURN `age`');
   });
 
   it('deletes a filtered set and returns what it removed', () => {
@@ -672,7 +684,7 @@ describe('graph', () => {
 
   it('walks an edge outward by default', () => {
     expect(surql(person.traverse({ from: 'person:a', edge: 'follows', to: 'person' })).surql).toBe(
-      'SELECT `id`->`follows`->`person` AS `related` FROM `person`',
+      'SELECT `id`->`follows`->`person` AS `related` FROM `person`:`a`',
     );
   });
 
@@ -687,7 +699,13 @@ describe('graph', () => {
           select: ['name'],
         }),
       ).surql,
-    ).toBe('SELECT `id`<-`follows`<-`person`.`name` AS `name` FROM `person`');
+    ).toBe('SELECT `id`<-`follows`<-`person`.`name` AS `name` FROM `person`:`a`');
+  });
+
+  it('keys FROM by the walked record, not the edge collection itself', () => {
+    expect(surql(follows.traverse({ from: 'person:a', edge: 'follows', to: 'person' })).surql).toBe(
+      'SELECT `id`->`follows`->`person` AS `related` FROM `person`:`a`',
+    );
   });
 });
 

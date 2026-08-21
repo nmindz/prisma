@@ -5,6 +5,7 @@ import type {
   OrderTerm,
   Projection,
   RecordIdKey,
+  ReturnClause,
   SurrealExpr,
   SurrealQuery,
   SurrealStatement,
@@ -356,6 +357,17 @@ function selectFor(args: FindManyArgs): readonly Projection[] {
   return names.map((name) => ({ expr: field(name) }));
 }
 
+/**
+ * A mutation's `RETURN` clause: the written/removed record in full
+ * (`AFTER`) with no `select`, or just the named fields as `RETURN a, b`
+ * when one was given — the same field list `selectFor` computes for reads,
+ * reused here for writes.
+ */
+function returnsFor(select: SelectInput | undefined): ReturnClause {
+  if (select === undefined) return { kind: 'after' };
+  return { kind: 'projections', projections: selectFor({ select }) };
+}
+
 /** The declared relation field names on a table, in declaration order. */
 function relationNamesOf(fields: ReadonlyArray<SurrealField>): readonly string[] {
   return fields
@@ -568,8 +580,8 @@ function targetFor(table: string, id: RecordKeyInput | undefined) {
  * rendered as `table:key`, and passing the text straight through would emit
  * an identifier that SurrealDB reads as a field name.
  */
-function recordExpr(value: RecordId | string): SurrealExpr {
-  if (typeof value !== 'string') return { kind: 'record-id', recordId: value };
+function recordIdFor(value: RecordId | string): RecordId {
+  if (typeof value !== 'string') return value;
   const parsed = RecordId.parse(value);
   if (parsed === undefined) {
     throw structuredError(
@@ -578,7 +590,11 @@ function recordExpr(value: RecordId | string): SurrealExpr {
       { meta: { value } },
     );
   }
-  return { kind: 'record-id', recordId: parsed };
+  return parsed;
+}
+
+function recordExpr(value: RecordId | string): SurrealExpr {
+  return { kind: 'record-id', recordId: recordIdFor(value) };
 }
 
 function plan<Row>(
@@ -825,7 +841,7 @@ export class SurrealCollection<Row = Record<string, unknown>, TFieldNames extend
           kind: 'create',
           target: targetFor(this.#table, args.id),
           payload: { kind: 'content', value: contentOf(args.data, params) },
-          returns: { kind: 'after' },
+          returns: returnsFor(args.select),
         },
       ],
       this.#storageHash,
@@ -1003,7 +1019,7 @@ export class SurrealCollection<Row = Record<string, unknown>, TFieldNames extend
               ? { kind: 'merge', value: content }
               : { kind: 'content', value: content },
           ...(where === undefined ? {} : { where }),
-          returns: { kind: 'after' },
+          returns: returnsFor(args.select),
         },
       ],
       this.#storageHash,
@@ -1060,7 +1076,12 @@ export class SurrealCollection<Row = Record<string, unknown>, TFieldNames extend
    *
    * Direction defaults to `out`, the direction `relate` writes.
    */
-  traverse(args: TraverseArgs): SurrealQueryPlan<{ related: unknown }> {
+  traverse(args: TraverseArgs & { select?: undefined }): SurrealQueryPlan<{ related: unknown }>;
+  traverse<const S extends readonly string[]>(
+    args: TraverseArgs & { select: S },
+  ): SurrealQueryPlan<{ [K in S[number]]: unknown }>;
+  traverse(args: TraverseArgs): SurrealQueryPlan<Record<string, unknown>> {
+    const fromId = recordIdFor(args.from);
     const step = {
       direction: args.direction ?? 'out',
       edge: args.edge,
@@ -1075,7 +1096,7 @@ export class SurrealCollection<Row = Record<string, unknown>, TFieldNames extend
       },
       alias: name,
     }));
-    return plan<{ related: unknown }>(
+    return plan<Record<string, unknown>>(
       [
         {
           kind: 'select',
@@ -1088,7 +1109,7 @@ export class SurrealCollection<Row = Record<string, unknown>, TFieldNames extend
                     alias: 'related',
                   },
                 ],
-          from: [targetFor(this.#table, undefined)],
+          from: [targetFor(fromId.tableName, fromId)],
         },
       ],
       this.#storageHash,

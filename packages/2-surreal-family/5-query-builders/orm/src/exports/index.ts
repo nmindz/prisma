@@ -1,7 +1,10 @@
 export type {
+  AggregateFn,
+  AggregateSelector,
   CreateArgs,
   DeleteArgs,
   FindManyArgs,
+  GroupByArgs,
   LiveArgs,
   OrderByInput,
   RecordKeyInput,
@@ -9,6 +12,9 @@ export type {
   SelectInput,
   TraverseArgs,
   UpdateArgs,
+  UpsertArgs,
+  UpsertByIdArgs,
+  UpsertByUniqueArgs,
 } from '../collection';
 export { SurrealCollection } from '../collection';
 export type { FieldFilter, WhereInput } from '../filters';
