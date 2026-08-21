@@ -4,6 +4,18 @@
 
 Prisma Next supports multiple SQL dialects via adapters. Lanes (DSL, ORM, TypedSQL, Raw) lower abstract Plans to dialect SQL. Some SQL features are optional or versioned (e.g., LATERAL, json_agg, transactional DDL, concurrent index creation). We need a consistent way for adapters to surface capabilities and for lanes to react when features are missing or discouraged.
 
+## Amendment (August 29, 2026) — implemented capability shape
+
+The `AdapterProfile` shape below, with `staticCaps: Set<CapabilityId>` and `runtimeCaps: Set<CapabilityId>`, was never built. What exists instead is a two-level namespace bag, populated at contract-emission time rather than by adapter runtime probing:
+
+- `ComponentMetadata.capabilities?: Record<string, unknown>` is declared per component descriptor (`packages/1-framework/1-core/framework-components/src/shared/framework-components.ts:10-19`).
+- Declarations are folded across every component into `CapabilityMatrix = Record<string, Record<string, boolean>>` by `mergeCapabilityMatrices()` (`packages/1-framework/1-core/framework-components/src/shared/capabilities.ts:12,70-90`).
+- The CLI's `enrichContract` calls `mergeCapabilityMatrices(ir.capabilities, components)` at emit time and writes the result onto `contract.capabilities` (`packages/1-framework/3-tooling/cli/src/control-api/contract-enrichment.ts:66,82`).
+
+The intent this ADR describes — lanes get a read-only view of declared capabilities sourced from the contract (see "Discovery cadence and caching" below) — is honored; only the concrete type shape differs, and there is no runtime discovery probe distinct from the static declaration.
+
+Adapter-side, only Postgres declares a `profile.capabilities` today (`packages/3-targets/6-adapters/postgres/src/core/adapter.ts:24-59`), and its `AdapterProfile` type lives at `packages/2-sql/4-lanes/relational-core/src/ast/adapter-types.ts:18`, shaped around `SqlQueryable` — a SQL-family type the SurrealDB family cannot reuse. The SurrealDB adapter (`packages/3-surreal-target/2-surreal-adapter/src/core/adapter.ts`) declares no `profile` at all; it reads `contract.capabilities` directly instead, which is the correct choice under ADR 164 §2 ("must not own adapter/driver internals").
+
 ## Problem
 
 - Lanes must not emit SQL that the target cannot execute

@@ -12,6 +12,20 @@ Rather than weaken the lane-level guarantee, we introduce a **Repository Layer**
 
 The existing ORM lane (ADR 015) will eventually be deprecated and removed; the repository layer is its successor.
 
+## Amendment (August 29, 2026) — a second, family-scoped implementation
+
+§1 originally named a single package as *the* layer-6 implementation. The repository layer is a pattern that any target family can implement, not a single package: a second, independent implementation now exists for the SurrealDB family, alongside the original SQL one. Both honor §2's dependency rules, §3's multi-query permission, §8's `meta.lane = 'orm-client'` tagging, and §9's capability-driven strategy selection:
+
+- `@internal/sql-orm-client` at `packages/3-extensions/sql-orm-client/` — the SQL family's implementation, published under `./orm-client` by the `@prisma/orm-postgres` and `@prisma/orm-sqlite` facades.
+- `@internal/surreal-orm-client` at `packages/3-extensions/surreal-orm-client/` — the SurrealDB family's implementation, published as `@prisma/orm-surrealdb/orm-client`.
+
+The two return differently-shaped client objects, and the difference is principled rather than accidental:
+
+- The SQL client returns a namespaced `Proxy` — `{ [namespace]: { [Model]: Collection } }` (`packages/3-extensions/sql-orm-client/src/orm.ts`) — because a SQL family contract declares multiple domain namespaces that must stay addressable side by side.
+- The SurrealDB client returns a flat, table-keyed map — `OrmClientDb<TContract>` (`packages/3-extensions/surreal-orm-client/src/orm.ts`) — because the SurrealDB family has a single, unbound namespace; there is nothing to nest under.
+
+Both shapes satisfy this ADR. §1–§9 below describe the layer both implementations conform to, illustrated by the SQL client that originally motivated it; read `@internal/sql-orm-client` in those sections as "the layer-6 implementation for a given family."
+
 ## Decision
 
 ### 1) Package location and plane
