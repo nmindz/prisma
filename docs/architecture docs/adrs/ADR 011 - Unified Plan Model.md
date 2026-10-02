@@ -4,6 +4,28 @@
 
 We support multiple query authoring lanes: SQL DSL, ORM extension over the DSL, Raw SQL escape hatch, future TypedSQL CLI. To keep the runtime simple and safe, every lane must converge on a single execution contract: a Plan that the runtime can verify, lint, budget, and execute. Prior designs leaked lane-specific behavior into execution or required generated clients; we want one immutable object that captures everything needed for safety and observability.
 
+## Amendment (August 29, 2026) — implemented `PlanMeta` diverges from the shape below
+
+The `meta` block in "Plan shape" below predates the shipped implementation and no longer matches it. The implemented type is `PlanMeta` (`packages/1-framework/0-foundation/contract/src/types.ts:223-230`):
+
+```ts
+export interface PlanMeta {
+  readonly target: string;
+  readonly targetFamily?: string;
+  readonly storageHash: string;
+  readonly profileHash?: string;
+  readonly lane: string;
+  readonly annotations?: { readonly [key: string]: unknown };
+}
+```
+
+Two concrete differences from the sample below:
+
+1. **`coreHash` (required) vs. `storageHash` (required) + `profileHash` (optional).** No field named `coreHash` exists on `PlanMeta`. A same-named function, `coreHash()` (`packages/1-framework/0-foundation/contract/src/types.ts:36`), is a branding constructor used to build a `storageHash` value — it is not this field, and its presence in the codebase is not evidence the field survived. This is a framework-wide divergence, not something specific to any one target: whether this ADR is simply stale on the point, or whether a `coreHash` concept represents a still-open gap in the framework's plan-identity model, is **left open by this amendment** — it is not resolved here.
+2. **`lane: 'dsl' | 'orm' | 'raw-sql' | 'typed-sql'` (closed union) vs. `lane: string` (open).** The implemented type accepts any string. `'orm-client'` has been a live value since before this amendment (`packages/3-extensions/sql-orm-client/src/query-plan-meta.ts:51`), predating and outliving the SurrealDB family's own repository layer (ADR 164), which stamps the same `lane: 'orm-client'`.
+
+The rest of this ADR — immutability, hashing and identity delegated to ADR 013, lane-agnostic runtime handling — remains the decision as adopted.
+
 ## Decision
 
 Define a Unified Plan model used by all lanes and runtimes:

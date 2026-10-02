@@ -1,0 +1,71 @@
+{
+  "name": "@internal/target-surrealdb",
+  "private": true,
+  "version": "8.0.0-rc.14",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "SurrealDB target pack for Prisma 8: codecs, DDL, and descriptors",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --coverage --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "@internal/contract": "workspace:8.0.0-rc.14",
+    "@internal/framework-components": "workspace:8.0.0-rc.14",
+    "@internal/surreal-codec": "workspace:8.0.0-rc.14",
+    "@internal/surreal-contract": "workspace:8.0.0-rc.14",
+    "@internal/surreal-errors": "workspace:8.0.0-rc.14",
+    "@internal/surreal-schema-ir": "workspace:8.0.0-rc.14",
+    "@internal/surreal-value": "workspace:8.0.0-rc.14",
+    "@internal/utils": "workspace:8.0.0-rc.14",
+    "@standard-schema/spec": "1.1.0",
+    "arktype": "catalog:"
+  },
+  "devDependencies": {
+    "@internal/driver-surrealdb": "workspace:8.0.0-rc.14",
+    "@internal/family-surreal": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "exports": {
+    "./codec-ids": "./dist/codec-ids.mjs",
+    "./codecs": "./dist/codecs.mjs",
+    "./contract": "./dist/contract.mjs",
+    "./control": "./dist/control.mjs",
+    "./ddl": "./dist/ddl.mjs",
+    "./pack": "./dist/pack.mjs",
+    "./runtime": "./dist/runtime.mjs",
+    "./schema": "./dist/schema.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/3-surreal-target/1-surreal-target"
+  }
+}

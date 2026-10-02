@@ -128,12 +128,15 @@ export type ShellName =
   | '@prisma/orm-toolchain'
   | '@prisma/orm-family-sql'
   | '@prisma/orm-family-mongo'
+  | '@prisma/orm-family-surreal'
   | '@prisma/orm-target-postgres'
   | '@prisma/orm-target-sqlite'
   | '@prisma/orm-target-mongo'
+  | '@prisma/orm-target-surrealdb'
   | '@prisma/orm-postgres'
   | '@prisma/orm-sqlite'
   | '@prisma/orm-mongo'
+  | '@prisma/orm-surrealdb'
   | '@prisma/orm-extension-postgis'
   | '@prisma/orm-extension-pgvector'
   | '@prisma/orm-extension-paradedb'
@@ -256,6 +259,28 @@ const SQL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
  * the same surface the SQL facades carry as `orm-client`, which application
  * source in the SQLite example uses directly.
  */
+/**
+ * The SurrealDB family's query surfaces.
+ *
+ * `query-ast` carries the statement and expression nodes an application names
+ * when it builds a plan by hand, and `lowering` the seam types a custom
+ * driver implements. `cbor` is the wire encoding and its tag vocabulary, which
+ * a custom driver needs to speak the binary subprotocol. `schema-ir` is what
+ * code driving drift detection reads.
+ */
+const SURREAL_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
+  { package: '@internal/surreal-contract-ts', entry: 'contract-ts' },
+  { package: '@internal/surreal-orm', entry: 'orm' },
+  { package: '@internal/surreal-orm-client', entry: 'orm-client' },
+  { package: '@internal/surreal-query-builder', entry: 'query-builder' },
+  { package: '@internal/surreal-query-ast', entry: 'query-ast' },
+  { package: '@internal/surreal-lowering', entry: 'lowering' },
+  { package: '@internal/surreal-cbor', entry: 'cbor' },
+  { package: '@internal/surreal-schema-ir', entry: 'schema-ir' },
+  { package: '@internal/surreal-value', entry: 'value' },
+  { package: '@internal/surreal-errors', entry: 'errors' },
+];
+
 const MONGO_QUERY_REEXPORTS: readonly ShellReexportMapping[] = [
   { package: '@internal/mongo-orm', entry: 'orm' },
   { package: '@internal/mongo-query-builder', entry: 'query-builder' },
@@ -459,6 +484,98 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
     },
   ],
   [
+    '@prisma/orm-family-surreal',
+    {
+      dir: 'packages/9-public/@prisma/orm-family-surreal',
+      kind: 'platform',
+      packages: [
+        {
+          dir: 'packages/2-surreal-family/1-foundation/surreal-value',
+          name: '@internal/surreal-value',
+          entry: 'value',
+        },
+        {
+          dir: 'packages/2-surreal-family/1-foundation/surreal-contract',
+          name: '@internal/surreal-contract',
+          entry: 'contract',
+        },
+        {
+          dir: 'packages/2-surreal-family/1-foundation/surreal-codec',
+          name: '@internal/surreal-codec',
+          entry: 'codec',
+        },
+        {
+          dir: 'packages/2-surreal-family/1-foundation/surreal-errors',
+          name: '@internal/surreal-errors',
+          entry: 'errors',
+        },
+        {
+          dir: 'packages/2-surreal-family/2-authoring/contract-psl',
+          name: '@internal/surreal-contract-psl',
+          entry: 'contract-psl',
+        },
+        {
+          dir: 'packages/2-surreal-family/2-authoring/contract-ts',
+          name: '@internal/surreal-contract-ts',
+          entry: 'contract-ts',
+        },
+        {
+          dir: 'packages/2-surreal-family/3-tooling/surreal-schema-ir',
+          name: '@internal/surreal-schema-ir',
+          entry: 'schema-ir',
+        },
+        {
+          dir: 'packages/2-surreal-family/3-tooling/emitter',
+          name: '@internal/surreal-emitter',
+          entry: 'emitter',
+        },
+        {
+          dir: 'packages/2-surreal-family/4-query/query-ast',
+          name: '@internal/surreal-query-ast',
+          entry: 'query-ast',
+        },
+        {
+          dir: 'packages/2-surreal-family/5-query-builders/orm',
+          name: '@internal/surreal-orm',
+          entry: 'orm',
+        },
+        {
+          dir: 'packages/2-surreal-family/5-query-builders/query-builder',
+          name: '@internal/surreal-query-builder',
+          entry: 'query-builder',
+        },
+        {
+          dir: 'packages/2-surreal-family/6-transport/surreal-cbor',
+          name: '@internal/surreal-cbor',
+          entry: 'cbor',
+        },
+        {
+          dir: 'packages/2-surreal-family/6-transport/surreal-lowering',
+          name: '@internal/surreal-lowering',
+          entry: 'lowering',
+        },
+        {
+          dir: 'packages/2-surreal-family/7-runtime',
+          name: '@internal/surreal-runtime',
+          entry: 'runtime',
+        },
+        {
+          dir: 'packages/2-surreal-family/9-family',
+          name: '@internal/family-surreal',
+          entry: 'family',
+        },
+        // Platform code despite its `3-extensions/` directory: the facade
+        // depends on it, and one module may live in only one published
+        // package, so it cannot be duplicated into the facade.
+        {
+          dir: 'packages/3-extensions/surreal-orm-client',
+          name: '@internal/surreal-orm-client',
+          entry: 'orm-client',
+        },
+      ],
+    },
+  ],
+  [
     '@prisma/orm-family-mongo',
     {
       dir: 'packages/9-public/@prisma/orm-family-mongo',
@@ -539,6 +656,30 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           dir: 'packages/2-mongo-family/9-family',
           name: '@internal/family-mongo',
           entry: 'family',
+        },
+      ],
+    },
+  ],
+  [
+    '@prisma/orm-target-surrealdb',
+    {
+      dir: 'packages/9-public/@prisma/orm-target-surrealdb',
+      kind: 'platform',
+      packages: [
+        {
+          dir: 'packages/3-surreal-target/1-surreal-target',
+          name: '@internal/target-surrealdb',
+          entry: 'target',
+        },
+        {
+          dir: 'packages/3-surreal-target/2-surreal-adapter',
+          name: '@internal/adapter-surrealdb',
+          entry: 'adapter',
+        },
+        {
+          dir: 'packages/3-surreal-target/3-surreal-driver',
+          name: '@internal/driver-surrealdb',
+          entry: 'driver',
         },
       ],
     },
@@ -685,6 +826,29 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
         adapter: '@internal/adapter-sqlite',
         driver: '@internal/driver-sqlite',
         queryBuilders: SQL_QUERY_REEXPORTS,
+      }),
+    },
+  ],
+  [
+    '@prisma/orm-surrealdb',
+    {
+      dir: 'packages/9-public/@prisma/orm-surrealdb',
+      kind: 'facade',
+      packages: [
+        {
+          dir: 'packages/3-extensions/surrealdb',
+          name: '@internal/extension-surrealdb',
+          entry: '',
+        },
+      ],
+      reexports: facadeReexports({
+        family: '@internal/surreal-contract',
+        familyPack: '@internal/family-surreal',
+        runtime: '@internal/surreal-runtime',
+        target: '@internal/target-surrealdb',
+        adapter: '@internal/adapter-surrealdb',
+        driver: '@internal/driver-surrealdb',
+        queryBuilders: SURREAL_QUERY_REEXPORTS,
       }),
     },
   ],

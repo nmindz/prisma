@@ -1,0 +1,63 @@
+{
+  "name": "@internal/surreal-orm-client",
+  "private": true,
+  "version": "8.0.0-rc.14",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "ORM client for Prisma 8 — repository layer over the SurrealDB ORM lane",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "@internal/contract": "workspace:8.0.0-rc.14",
+    "@internal/surreal-contract": "workspace:8.0.0-rc.14",
+    "@internal/surreal-orm": "workspace:8.0.0-rc.14",
+    "@internal/surreal-query-ast": "workspace:8.0.0-rc.14",
+    "@internal/surreal-runtime": "workspace:8.0.0-rc.14",
+    "@internal/surreal-value": "workspace:8.0.0-rc.14",
+    "@internal/utils": "workspace:8.0.0-rc.14"
+  },
+  "devDependencies": {
+    "@internal/driver-surrealdb": "workspace:8.0.0-rc.14",
+    "@internal/surreal-lowering": "workspace:8.0.0-rc.14",
+    "@repo/test-utils": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/3-extensions/surreal-orm-client"
+  }
+}

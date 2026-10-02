@@ -1,0 +1,1 @@
+export { surrealEmission } from '../index';

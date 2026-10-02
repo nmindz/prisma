@@ -7,3 +7,35 @@ services:
       POSTGRES_PASSWORD: postgres
     tmpfs:
       - /var/lib/postgresql/data
+
+  # SurrealDB for the `@internal/driver-surrealdb` integration suite.
+  #
+  # Behind a profile so `docker compose up` keeps bringing up exactly what it
+  # brought up before. Start it with:
+  #   docker compose --profile surrealdb up -d
+  #
+  # Port 8112 rather than SurrealDB's default 8000: 8000 is a popular default
+  # for local dev servers, and a contributor already running one should not
+  # have to stop it to run this repo's tests.
+  #
+  # In-memory storage, like the Postgres service's tmpfs above — the suite
+  # creates and drops its own tables on every run, so nothing here is worth
+  # persisting, and a fresh process is one less way for a previous run to
+  # affect the next.
+  surrealdb:
+    image: surrealdb/surrealdb:v3.2.4
+    ports:
+      - "8112:8000"
+    environment:
+      SURREAL_USER: root
+      SURREAL_PASS: root
+    command: ["start", "memory"]
+    profiles:
+      - surrealdb
+    healthcheck:
+      # Exec form with an absolute path: the image is distroless and has no
+      # shell for docker to wrap a string command in.
+      test: ["CMD", "/surreal", "is-ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
