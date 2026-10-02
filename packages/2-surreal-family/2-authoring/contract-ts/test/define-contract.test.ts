@@ -175,6 +175,59 @@ describe('defineContract', () => {
     ).toThrow(/exactly one vector field/);
   });
 
+  it('carries default as a SurrealQL default expression', () => {
+    const contract = defineContract({
+      tables: { person: { fields: { joined: { type: t.datetime(), default: 'time::now()' } } } },
+    });
+    const field =
+      contract.storage.namespaces['__unbound__']?.entries.table?.['person']?.fieldNamed('joined');
+    expect(field?.defaultExpression).toBe('time::now()');
+    expect(field?.defaultValue).toBeUndefined();
+  });
+
+  it('passes defaultValue through as the canonical default value', () => {
+    const contract = defineContract({
+      tables: {
+        person: {
+          fields: {
+            age: { type: t.int(), defaultValue: 42 },
+            balance: { type: t.decimal(), defaultValue: '1.50' },
+            tags: { type: t.array(t.string()), defaultValue: ['a', 'b'] },
+            active: { type: t.bool(), defaultValue: false },
+          },
+        },
+      },
+    });
+    const table = contract.storage.namespaces['__unbound__']?.entries.table?.['person'];
+    expect(table?.fieldNamed('age')?.defaultValue).toBe(42);
+    expect(table?.fieldNamed('balance')?.defaultValue).toBe('1.50');
+    expect(table?.fieldNamed('tags')?.defaultValue).toEqual(['a', 'b']);
+    expect(table?.fieldNamed('active')?.defaultValue).toBe(false);
+    expect(table?.fieldNamed('age')?.defaultExpression).toBeUndefined();
+  });
+
+  it('gives a different hash for a default value and the same text as an expression', () => {
+    const asValue = defineContract({
+      tables: { person: { fields: { age: { type: t.int(), defaultValue: 42 } } } },
+    });
+    const asExpression = defineContract({
+      tables: { person: { fields: { age: { type: t.int(), default: '42' } } } },
+    });
+    expect(asValue.storage.storageHash).not.toBe(asExpression.storage.storageHash);
+  });
+
+  it('refuses a field declaring both default and defaultValue', () => {
+    expect(() =>
+      defineContract({
+        tables: {
+          person: { fields: { age: { type: t.int(), default: '42', defaultValue: 42 } } },
+        },
+      }),
+    ).toThrow(
+      'Field "age" on table "person" declares both default (a SurrealQL expression) and defaultValue (a literal value); declare one of them',
+    );
+  });
+
   it('carries sequences when the contract declares them', () => {
     const contract = defineContract({
       tables: { person: {} },

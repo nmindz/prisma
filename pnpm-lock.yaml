@@ -3499,6 +3499,9 @@ importers:
       '@internal/surreal-contract':
         specifier: workspace:8.0.0-rc.14
         version: link:../1-foundation/surreal-contract
+      '@internal/surreal-contract-psl':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../2-authoring/contract-psl
       '@internal/surreal-emitter':
         specifier: workspace:8.0.0-rc.14
         version: link:../3-tooling/emitter

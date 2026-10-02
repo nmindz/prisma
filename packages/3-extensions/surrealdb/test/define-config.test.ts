@@ -63,4 +63,19 @@ describe('defineConfig', () => {
 
     expect(config.contract?.output).toBe('custom/dir/contract.json');
   });
+
+  it('wires a PSL contract source for a glob of .prisma files and derives output from its static prefix', () => {
+    const config = defineConfig({ contract: './prisma/**/*.prisma' });
+
+    expect(config.contract?.source.format).toBe('psl');
+    expect(config.contract?.source.inputs).toEqual(['./prisma/**/*.prisma']);
+    expect(config.contract?.output).toBe('./prisma/contract.json');
+  });
+
+  it('derives the same output from a backslash-separated glob contract as its forward-slash twin', () => {
+    const forwardSlash = defineConfig({ contract: './prisma/**/*.prisma' });
+    const backslash = defineConfig({ contract: '.\\prisma\\**\\*.prisma' });
+
+    expect(backslash.contract?.output).toBe(forwardSlash.contract?.output);
+  });
 });

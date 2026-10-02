@@ -1,5 +1,6 @@
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/default-namespace';
 import { crossRef } from '@internal/contract/types';
+import type { AuthoringContributions } from '@internal/framework-components/authoring';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
@@ -11,26 +12,50 @@ import {
   type InterpretPslDocumentToSurrealContractInput,
   interpretPslDocumentToSurrealContract,
 } from '../src/interpreter';
+import {
+  surrealFixtureCodecLookup,
+  surrealFixtureDataTypeEntries,
+  surrealFixtureDataTypeLookup,
+} from './fixture-data-types';
 
-function buildSymbolTableInput(
-  schema: string,
-  sourceId = 'test.prisma',
-): Omit<InterpretPslDocumentToSurrealContractInput, 'seedDiagnostics'> {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-  return { symbolTable: table, sourceFile, sourceId };
+type SchemaFiles = string | Readonly<Record<string, string>>;
+
+function interpretInput(
+  schema: SchemaFiles,
+  authoringContributions?: AuthoringContributions,
+): InterpretPslDocumentToSurrealContractInput {
+  const files = typeof schema === 'string' ? { 'test.prisma': schema } : schema;
+  const parsed = Object.entries(files).map(([path, text]) => parse(text, path));
+  const documents = parsed.map(({ document }) => document);
+  const [first, ...rest] = parsed.map(({ sources }) => sources);
+  if (first === undefined) throw new Error('expected at least one schema file');
+  const sources = first.merge(...rest);
+  const { symbolTable } = buildSymbolTable({ documents, sources });
+  return {
+    documents,
+    symbolTable,
+    sources,
+    authoringContributions: { dataTypes: surrealFixtureDataTypeEntries, ...authoringContributions },
+    dataTypeLookup: surrealFixtureDataTypeLookup,
+    codecLookup: surrealFixtureCodecLookup(),
+  };
 }
 
-function interpretOk(schema: string, sourceId?: string) {
-  const result = interpretPslDocumentToSurrealContract(buildSymbolTableInput(schema, sourceId));
+function interpretOk(schema: SchemaFiles) {
+  const result = interpretPslDocumentToSurrealContract(interpretInput(schema));
   if (!result.ok) {
     throw new Error(`expected ok, got diagnostics: ${JSON.stringify(result.failure.diagnostics)}`);
   }
   return result.value;
 }
 
-function interpretDiagnostics(schema: string, sourceId?: string) {
-  const result = interpretPslDocumentToSurrealContract(buildSymbolTableInput(schema, sourceId));
+function interpretDiagnostics(
+  schema: SchemaFiles,
+  authoringContributions?: AuthoringContributions,
+) {
+  const result = interpretPslDocumentToSurrealContract(
+    interpretInput(schema, authoringContributions),
+  );
   if (result.ok) {
     throw new Error('expected diagnostics, interpretation unexpectedly succeeded');
   }
@@ -43,6 +68,7 @@ type StorageTableShape = {
     readonly type: unknown;
     readonly codecId: string;
     readonly defaultExpression?: string;
+    readonly defaultValue?: unknown;
     readonly reference?: unknown;
   }[];
   readonly indexes: readonly {
@@ -59,6 +85,15 @@ function tableOf(ir: { readonly storage: unknown }, tableName: string): StorageT
   const table = storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table[tableName];
   if (!table) throw new Error(`expected table "${tableName}" in the interpreted storage block`);
   return table;
+}
+
+function domainModel(
+  ir: ReturnType<typeof interpretOk>,
+  modelName: string,
+): { readonly fields: unknown; readonly relations: unknown } {
+  const model = ir.domain.namespaces[UNBOUND_DOMAIN_NAMESPACE_ID]?.models[modelName];
+  if (!model) throw new Error(`expected domain model "${modelName}"`);
+  return model;
 }
 
 describe('interpretPslDocumentToSurrealContract', () => {
@@ -112,12 +147,12 @@ describe('interpretPslDocumentToSurrealContract', () => {
         }
       `);
 
-      expect(ir.domain.namespaces[UNBOUND_DOMAIN_NAMESPACE_ID]?.models['Widget']?.fields).toEqual({
+      expect(domainModel(ir, 'Widget').fields).toEqual({
         nickname: { type: { kind: 'scalar', codecId: 'surrealdb/string@1' }, nullable: true },
       });
     });
 
-    it('wraps list scalar fields in array<T> and reports many:true in the domain', () => {
+    it('wraps list scalar fields in array<T> with non-nullable elements in the domain', () => {
       const ir = interpretOk(`
         model Widget {
           id    String  @id
@@ -132,11 +167,59 @@ describe('interpretPslDocumentToSurrealContract', () => {
           codecId: 'surrealdb/string@1',
         },
       ]);
-      expect(ir.domain.namespaces[UNBOUND_DOMAIN_NAMESPACE_ID]?.models['Widget']?.fields).toEqual({
+      expect(domainModel(ir, 'Widget').fields).toEqual({
         tags: {
           type: { kind: 'scalar', codecId: 'surrealdb/string@1' },
           nullable: false,
-          many: true,
+          many: { elementNullable: false },
+        },
+      });
+    });
+
+    it('wraps nullable list elements T?[] in array<option<T>>', () => {
+      const ir = interpretOk(`
+        model Widget {
+          id    String  @id
+          tags  String?[]
+        }
+      `);
+
+      expect(tableOf(ir, 'widget').fields).toEqual([
+        {
+          name: 'tags',
+          type: { kind: 'array', of: { kind: 'option', of: { kind: 'scalar', name: 'string' } } },
+          codecId: 'surrealdb/string@1',
+        },
+      ]);
+      expect(domainModel(ir, 'Widget').fields).toEqual({
+        tags: {
+          type: { kind: 'scalar', codecId: 'surrealdb/string@1' },
+          nullable: false,
+          many: { elementNullable: true },
+        },
+      });
+    });
+
+    it('wraps an optional list T[]? in option<array<T>>', () => {
+      const ir = interpretOk(`
+        model Widget {
+          id    String  @id
+          tags  String[]?
+        }
+      `);
+
+      expect(tableOf(ir, 'widget').fields).toEqual([
+        {
+          name: 'tags',
+          type: { kind: 'option', of: { kind: 'array', of: { kind: 'scalar', name: 'string' } } },
+          codecId: 'surrealdb/string@1',
+        },
+      ]);
+      expect(domainModel(ir, 'Widget').fields).toEqual({
+        tags: {
+          type: { kind: 'scalar', codecId: 'surrealdb/string@1' },
+          nullable: true,
+          many: { elementNullable: false },
         },
       });
     });
@@ -163,6 +246,30 @@ describe('interpretPslDocumentToSurrealContract', () => {
       `);
       expect(ir.roots).toEqual({ accounts: crossRef('UserAccount', UNBOUND_DOMAIN_NAMESPACE_ID) });
     });
+
+    it('honours @map for field names, including in derived index names', () => {
+      const ir = interpretOk(`
+        model Widget {
+          id    String @id
+          email String @unique @map("email_address")
+        }
+      `);
+      const table = tableOf(ir, 'widget');
+      expect(table.fields).toEqual([
+        {
+          name: 'email_address',
+          type: { kind: 'scalar', name: 'string' },
+          codecId: 'surrealdb/string@1',
+        },
+      ]);
+      expect(table.indexes).toEqual([
+        {
+          name: 'widget_email_address_unique',
+          fields: ['email_address'],
+          variant: { kind: 'unique' },
+        },
+      ]);
+    });
   });
 
   describe('@id handling', () => {
@@ -182,9 +289,14 @@ describe('interpretPslDocumentToSurrealContract', () => {
           label String
         }
       `);
-      expect(diagnostics).toEqual(
-        expect.arrayContaining([expect.objectContaining({ code: 'PSL_MISSING_ID_FIELD' })]),
-      );
+      expect(diagnostics).toEqual([
+        {
+          code: 'PSL_MISSING_ID_FIELD',
+          message:
+            'Model "Widget" has no field with @id attribute. Every model must have exactly one @id field.',
+          sourceId: 'test.prisma',
+        },
+      ]);
     });
 
     it('reports PSL_MULTIPLE_ID_FIELDS when a model has more than one @id field', () => {
@@ -221,16 +333,17 @@ describe('interpretPslDocumentToSurrealContract', () => {
         codecId: 'surrealdb/record@1',
       });
 
-      expect(ir.domain.namespaces[UNBOUND_DOMAIN_NAMESPACE_ID]?.models['Post']?.relations).toEqual({
+      expect(domainModel(ir, 'Post').relations).toEqual({
         author: {
           to: crossRef('Author', UNBOUND_DOMAIN_NAMESPACE_ID),
           cardinality: 'N:1',
+          nullable: false,
           on: { localFields: ['author'], targetFields: ['id'] },
         },
       });
     });
 
-    it('wraps an optional relation field in option<record<table>>', () => {
+    it('wraps an optional relation field in option<record<table>> and marks the relation nullable', () => {
       const ir = interpretOk(`
         model Author {
           id String @id
@@ -245,6 +358,43 @@ describe('interpretPslDocumentToSurrealContract', () => {
         name: 'author',
         type: { kind: 'option', of: { kind: 'record', tables: ['author'] } },
         codecId: 'surrealdb/record@1',
+      });
+      expect(domainModel(ir, 'Post').relations).toEqual({
+        author: {
+          to: crossRef('Author', UNBOUND_DOMAIN_NAMESPACE_ID),
+          cardinality: 'N:1',
+          nullable: true,
+          on: { localFields: ['author'], targetFields: ['id'] },
+        },
+      });
+    });
+
+    it('links to the @@map table name of the target model', () => {
+      const ir = interpretOk(`
+        model Author {
+          id String @id
+          @@map("writers")
+        }
+
+        model Post {
+          id     String @id
+          author Author @map("written_by")
+        }
+      `);
+      expect(tableOf(ir, 'post').fields).toEqual([
+        {
+          name: 'written_by',
+          type: { kind: 'record', tables: ['writers'] },
+          codecId: 'surrealdb/record@1',
+        },
+      ]);
+      expect(domainModel(ir, 'Post').relations).toEqual({
+        author: {
+          to: crossRef('Author', UNBOUND_DOMAIN_NAMESPACE_ID),
+          cardinality: 'N:1',
+          nullable: false,
+          on: { localFields: ['written_by'], targetFields: ['id'] },
+        },
       });
     });
 
@@ -261,9 +411,26 @@ describe('interpretPslDocumentToSurrealContract', () => {
         }
       `);
       expect(tableOf(ir, 'author').fields).toEqual([]);
-      expect(
-        ir.domain.namespaces[UNBOUND_DOMAIN_NAMESPACE_ID]?.models['Author']?.relations,
-      ).toEqual({});
+      expect(domainModel(ir, 'Author').relations).toEqual({});
+    });
+
+    it('accepts a relation name alongside onDelete', () => {
+      const ir = interpretOk(`
+        model Author {
+          id String @id
+        }
+
+        model Post {
+          id     String @id
+          author Author @relation("PostAuthor", onDelete: Cascade)
+        }
+      `);
+      expect(tableOf(ir, 'post').fields).toContainEqual({
+        name: 'author',
+        type: { kind: 'record', tables: ['author'] },
+        codecId: 'surrealdb/record@1',
+        reference: { kind: 'cascade' },
+      });
     });
 
     it.each([
@@ -326,20 +493,52 @@ describe('interpretPslDocumentToSurrealContract', () => {
       );
     });
 
-    it('reports PSL_UNSUPPORTED_ONDELETE_ACTION for an unrecognized action', () => {
+    it('reports PSL_UNSUPPORTED_ONDELETE_ACTION at the @relation attribute for an unrecognized action', () => {
+      const diagnostics = interpretDiagnostics(`model Author {
+  id String @id
+}
+
+model Post {
+  id     String @id
+  author Author @relation(onDelete: WeirdAction)
+}
+`);
+      expect(diagnostics).toEqual([
+        {
+          code: 'PSL_UNSUPPORTED_ONDELETE_ACTION',
+          message:
+            'Field "Post.author" has @relation(onDelete: WeirdAction), which SurrealDB cannot represent; supported actions are Cascade, SetNull, Restrict, and NoAction',
+          sourceId: 'test.prisma',
+          span: {
+            start: { offset: 83, line: 7, column: 17 },
+            end: { offset: 115, line: 7, column: 49 },
+          },
+        },
+      ]);
+    });
+
+    it('rejects foreign-key fields and references arguments, which a record link does not use', () => {
       const diagnostics = interpretDiagnostics(`
         model Author {
           id String @id
         }
 
         model Post {
-          id     String @id
-          author Author @relation(onDelete: WeirdAction)
+          id       String @id
+          authorId String
+          author   Author @relation(fields: [authorId], references: [id])
         }
       `);
       expect(diagnostics).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ code: 'PSL_UNSUPPORTED_ONDELETE_ACTION' }),
+          expect.objectContaining({
+            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+            message: 'Attribute "relation" received unknown argument "fields"',
+          }),
+          expect.objectContaining({
+            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+            message: 'Attribute "relation" received unknown argument "references"',
+          }),
         ]),
       );
     });
@@ -389,6 +588,38 @@ describe('interpretPslDocumentToSurrealContract', () => {
         { name: 'widget_tenant_slug_idx', fields: ['tenant', 'slug'], variant: { kind: 'plain' } },
       ]);
     });
+
+    it('names model-level indexes from the name argument and maps their fields', () => {
+      const ir = interpretOk(`
+        model Widget {
+          id     String @id
+          tenant String @map("tenant_id")
+          slug   String
+          @@index([tenant, slug], name: "by_tenant")
+          @@unique([slug], name: "one_slug")
+        }
+      `);
+      expect(tableOf(ir, 'widget').indexes).toEqual([
+        { name: 'by_tenant', fields: ['tenant_id', 'slug'], variant: { kind: 'plain' } },
+        { name: 'one_slug', fields: ['slug'], variant: { kind: 'unique' } },
+      ]);
+    });
+
+    it('reports PSL_UNRESOLVED_REFERENCE for an index field the model does not declare', () => {
+      const diagnostics = interpretDiagnostics(`
+        model Widget {
+          id   String @id
+          slug String
+          @@index([slug, missing])
+        }
+      `);
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find field "missing" on "Widget"',
+        }),
+      ]);
+    });
   });
 
   describe('@default handling', () => {
@@ -403,7 +634,7 @@ describe('interpretPslDocumentToSurrealContract', () => {
       expect(fields.find((f) => f.name === 'createdAt')?.defaultExpression).toBe('time::now()');
     });
 
-    it('maps @default(uuid()) and @default(cuid()) to rand::uuid()', () => {
+    it('maps @default(uuid()) to rand::uuid() and @default(cuid()) to rand::ulid()', () => {
       const ir = interpretOk(`
         model Widget {
           id    String @id
@@ -413,23 +644,26 @@ describe('interpretPslDocumentToSurrealContract', () => {
       `);
       const fields = tableOf(ir, 'widget').fields;
       expect(fields.find((f) => f.name === 'token')?.defaultExpression).toBe('rand::uuid()');
-      expect(fields.find((f) => f.name === 'code')?.defaultExpression).toBe('rand::uuid()');
+      expect(fields.find((f) => f.name === 'code')?.defaultExpression).toBe('rand::ulid()');
     });
 
-    it('passes literal number and boolean defaults through unescaped', () => {
+    it('stores literal number and boolean defaults as canonical values', () => {
       const ir = interpretOk(`
         model Widget {
           id     String  @id
           active Boolean @default(true)
           count  Int     @default(0)
+          delta  Float   @default(-1.5)
         }
       `);
       const fields = tableOf(ir, 'widget').fields;
-      expect(fields.find((f) => f.name === 'active')?.defaultExpression).toBe('true');
-      expect(fields.find((f) => f.name === 'count')?.defaultExpression).toBe('0');
+      expect(fields.find((f) => f.name === 'active')).toMatchObject({ defaultValue: true });
+      expect(fields.find((f) => f.name === 'count')).toMatchObject({ defaultValue: 0 });
+      expect(fields.find((f) => f.name === 'delta')).toMatchObject({ defaultValue: -1.5 });
+      expect(fields.every((f) => f.defaultExpression === undefined)).toBe(true);
     });
 
-    it('escapes a quoted string literal default via escapeStringLiteral', () => {
+    it('stores a quoted string literal default as its text', () => {
       const ir = interpretOk(`
         model Widget {
           id     String @id
@@ -437,19 +671,119 @@ describe('interpretPslDocumentToSurrealContract', () => {
         }
       `);
       const fields = tableOf(ir, 'widget').fields;
-      expect(fields.find((f) => f.name === 'status')?.defaultExpression).toBe("'it\\'s fine'");
+      expect(fields.find((f) => f.name === 'status')).toMatchObject({ defaultValue: "it's fine" });
     });
 
-    it('reports PSL_UNSUPPORTED_DEFAULT for an expression Surreal cannot represent', () => {
+    it('reports PSL_UNSUPPORTED_DEFAULT for a function Surreal cannot represent', () => {
       const diagnostics = interpretDiagnostics(`
         model Widget {
           id    String @id
           count Int    @default(autoincrement())
         }
       `);
-      expect(diagnostics).toEqual(
-        expect.arrayContaining([expect.objectContaining({ code: 'PSL_UNSUPPORTED_DEFAULT' })]),
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_DEFAULT',
+          message:
+            'Field "Widget.count" has @default(autoincrement()), which SurrealQL cannot represent; supported default functions are now(), uuid(), and cuid()',
+          sourceId: 'test.prisma',
+        }),
+      ]);
+    });
+  });
+
+  describe('type resolution', () => {
+    it('reports PSL_UNRESOLVED_REFERENCE for a field type nothing declares', () => {
+      const diagnostics = interpretDiagnostics(`
+        model Widget {
+          id      String @id
+          payload Json
+        }
+      `);
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find type "Json"',
+          sourceId: 'test.prisma',
+        }),
+      ]);
+    });
+
+    it('rejects a contributed type that is not a Surreal PSL scalar', () => {
+      const diagnostics = interpretDiagnostics(
+        `
+        model Widget {
+          id   String     @id
+          link RecordLink
+        }
+      `,
+        {
+          type: {
+            RecordLink: {
+              kind: 'typeConstructor',
+              output: { codecId: 'surrealdb/record@1', nativeType: 'record' },
+            },
+          },
+        },
       );
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          message:
+            'Field "Widget.link" type "RecordLink" is not supported in Surreal PSL interpreter',
+        }),
+      ]);
+    });
+  });
+
+  describe('attribute specs', () => {
+    it('reports PSL_UNSUPPORTED_FIELD_ATTRIBUTE for a field attribute Surreal does not interpret', () => {
+      const diagnostics = interpretDiagnostics(`model Widget {
+  id        String   @id
+  updatedAt DateTime @updatedAt
+}
+`);
+      expect(diagnostics).toEqual([
+        {
+          code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+          message: 'Field "Widget.updatedAt" uses unsupported attribute "@updatedAt"',
+          sourceId: 'test.prisma',
+          span: {
+            start: { offset: 61, line: 3, column: 22 },
+            end: { offset: 71, line: 3, column: 32 },
+          },
+        },
+      ]);
+    });
+
+    it('reports PSL_UNSUPPORTED_MODEL_ATTRIBUTE for a model attribute Surreal does not interpret', () => {
+      const diagnostics = interpretDiagnostics(`
+        model Widget {
+          id String @id
+          @@ignore
+        }
+      `);
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+          message: 'Model "Widget" uses unsupported attribute "@@ignore"',
+        }),
+      ]);
+    });
+
+    it('reports PSL_INVALID_ATTRIBUTE_SYNTAX for a @@map argument that is not a string', () => {
+      const diagnostics = interpretDiagnostics(`
+        model Widget {
+          id String @id
+          @@map(widgets)
+        }
+      `);
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Expected a string literal',
+        }),
+      ]);
     });
   });
 
@@ -468,12 +802,13 @@ describe('interpretPslDocumentToSurrealContract', () => {
           expect.objectContaining({
             code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
             message: expect.stringMatching(/[Ss]urreal/),
+            sourceId: 'test.prisma',
           }),
         ]),
       );
     });
 
-    it('rejects enum blocks', () => {
+    it('rejects enum blocks and fields typed with them', () => {
       const diagnostics = interpretDiagnostics(
         `enum Role {
   Admin
@@ -486,9 +821,13 @@ model User {
 }
 `,
       );
-      expect(diagnostics).toEqual(
-        expect.arrayContaining([expect.objectContaining({ code: 'PSL_UNSUPPORTED_ENUM_BLOCK' })]),
-      );
+      expect(diagnostics).toEqual([
+        expect.objectContaining({ code: 'PSL_UNSUPPORTED_ENUM_BLOCK', sourceId: 'test.prisma' }),
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          message: 'Field "User.role" type "Role" is not supported in Surreal PSL interpreter',
+        }),
+      ]);
     });
 
     it('rejects composite type declarations', () => {
@@ -503,29 +842,57 @@ model User {
           address Address
         }
       `);
-      expect(diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ code: 'PSL_UNSUPPORTED_COMPOSITE_TYPE' }),
-          expect.objectContaining({ code: 'PSL_UNSUPPORTED_FIELD_TYPE' }),
-        ]),
-      );
+      expect(diagnostics).toEqual([
+        expect.objectContaining({ code: 'PSL_UNSUPPORTED_COMPOSITE_TYPE' }),
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          message:
+            'Field "User.address" type "Address" is a composite type, which is not supported in Surreal PSL interpreter',
+        }),
+      ]);
+    });
+  });
+
+  describe('multi-file schemas', () => {
+    it('interprets models declared across files into one contract', () => {
+      const ir = interpretOk({
+        'author.prisma': `model Author {
+  id   String @id
+  name String
+}
+`,
+        'post.prisma': `model Post {
+  id     String @id
+  author Author
+}
+`,
+      });
+      expect(Object.keys(ir.roots).sort()).toEqual(['author', 'post']);
+      expect(tableOf(ir, 'post').fields).toEqual([
+        {
+          name: 'author',
+          type: { kind: 'record', tables: ['author'] },
+          codecId: 'surrealdb/record@1',
+        },
+      ]);
     });
 
-    it('rejects a field typed with an unrecognized scalar', () => {
-      const diagnostics = interpretDiagnostics(`
-        model Widget {
-          id      String @id
-          payload Json
-        }
-      `);
-      expect(diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            message: expect.stringContaining('Json'),
-          }),
-        ]),
-      );
+    it('attributes each diagnostic to the file that declares the offending node', () => {
+      const diagnostics = interpretDiagnostics({
+        'author.prisma': `model Author {
+  id String @id
+  payload Json
+}
+`,
+        'post.prisma': `model Post {
+  title String
+}
+`,
+      });
+      expect(diagnostics).toEqual([
+        expect.objectContaining({ code: 'PSL_UNRESOLVED_REFERENCE', sourceId: 'author.prisma' }),
+        expect.objectContaining({ code: 'PSL_MISSING_ID_FIELD', sourceId: 'post.prisma' }),
+      ]);
     });
   });
 
@@ -621,6 +988,33 @@ model User {
             fields: {
               title: { type: t.string() },
               author: { type: t.record('user'), onDelete: 'cascade' },
+            },
+          },
+        },
+      });
+
+      expect(psl.storage.storageHash).toBe(ts.storage.storageHash);
+    });
+
+    it('produces the same storage hash for @default as defaultValue and default in TS', () => {
+      const psl = interpretOk(`
+        model Widget {
+          id      String   @id
+          count   Int      @default(42)
+          price   Decimal  @default(1.50)
+          tags    String[] @default(["a", "b"])
+          created DateTime @default(now())
+        }
+      `);
+
+      const ts = defineContract({
+        tables: {
+          widget: {
+            fields: {
+              count: { type: t.int(), defaultValue: 42 },
+              price: { type: t.decimal(), defaultValue: '1.50' },
+              tags: { type: t.array(t.string()), defaultValue: ['a', 'b'] },
+              created: { type: t.datetime(), default: 'time::now()' },
             },
           },
         },

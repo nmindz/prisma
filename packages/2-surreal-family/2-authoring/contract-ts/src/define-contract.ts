@@ -1,6 +1,6 @@
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/default-namespace';
 import { computeStorageHash } from '@internal/contract/hashing';
-import type { Contract } from '@internal/contract/types';
+import type { Contract, JsonValue } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type {
   SurrealAnalyzerInput,
@@ -18,6 +18,7 @@ import type {
   SurrealTableType,
 } from '@internal/surreal-contract/types';
 import { blindCast } from '@internal/utils/casts';
+import { structuredError } from '@internal/utils/structured-error';
 
 /** How a field is declared in a `defineContract` call. */
 export interface FieldDefinition {
@@ -26,7 +27,13 @@ export interface FieldDefinition {
   readonly codecId?: string;
   readonly flexible?: boolean;
   readonly readOnly?: boolean;
+  /** `DEFAULT <expr>`, written as SurrealQL. */
   readonly default?: string;
+  /**
+   * `DEFAULT <literal>`, written as the canonical form of the field codec's data type (ADR 254):
+   * `42` for an int, `'1.50'` for a decimal. Stored as given; nothing here encodes a JS value.
+   */
+  readonly defaultValue?: JsonValue;
   readonly value?: string;
   readonly assert?: string;
   readonly permissions?: SurrealPermissions;
@@ -94,6 +101,23 @@ function defaultCodecFor(type: SurrealFieldType): string {
   }
 }
 
+function fieldDefault(
+  tableName: string,
+  fieldName: string,
+  field: FieldDefinition,
+): { readonly defaultExpression: string } | { readonly defaultValue: JsonValue } | undefined {
+  if (field.default !== undefined && field.defaultValue !== undefined) {
+    throw structuredError(
+      'CONTRACT.STORAGE_INVALID',
+      `Field "${fieldName}" on table "${tableName}" declares both default (a SurrealQL expression) and defaultValue (a literal value); declare one of them`,
+      { meta: { table: tableName, field: fieldName } },
+    );
+  }
+  if (field.default !== undefined) return { defaultExpression: field.default };
+  if (field.defaultValue !== undefined) return { defaultValue: field.defaultValue };
+  return undefined;
+}
+
 function storageEntries(definition: ContractDefinition): SurrealNamespaceTablesInput['entries'] {
   const table: Record<string, SurrealTableInput> = {};
   for (const [name, spec] of Object.entries(definition.tables)) {
@@ -106,7 +130,7 @@ function storageEntries(definition: ContractDefinition): SurrealNamespaceTablesI
         codecId: field.codecId ?? defaultCodecFor(field.type),
         ...(field.flexible === undefined ? {} : { flexible: field.flexible }),
         ...(field.readOnly === undefined ? {} : { readOnly: field.readOnly }),
-        ...(field.default === undefined ? {} : { defaultExpression: field.default }),
+        ...fieldDefault(name, fieldName, field),
         ...(field.value === undefined ? {} : { valueExpression: field.value }),
         ...(field.assert === undefined ? {} : { assertExpression: field.assert }),
         ...(field.permissions === undefined ? {} : { permissions: field.permissions }),

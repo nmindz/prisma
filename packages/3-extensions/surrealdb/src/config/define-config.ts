@@ -1,6 +1,9 @@
 import surrealAdapter from '@internal/adapter-surrealdb/control';
 import type { ContractConfig, PrismaNextConfig } from '@internal/config/config-types';
-import { defineConfig as coreDefineConfig } from '@internal/config/config-types';
+import {
+  defineConfig as coreDefineConfig,
+  defaultContractOutputPath,
+} from '@internal/config/config-types';
 import surrealDriver from '@internal/driver-surrealdb/control';
 import { surrealFamilyDescriptor } from '@internal/family-surreal/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
@@ -20,26 +23,19 @@ export interface SurrealdbConfigOptions {
    */
   readonly connection?: string;
   /**
-   * Path to the contract's authoring source: a `.prisma` schema (interpreted
-   * by the PSL provider) or a `.ts` module whose default export is a
-   * `defineContract` result. Optional — a client can also load an
+   * The contract's authoring source: a `.prisma` path or glob (interpreted by
+   * the PSL provider; only matched files carrying the `// use prisma-8`
+   * directive belong to the schema) or a `.ts` module whose default export is
+   * a `defineContract` result. Optional — a client can also load an
    * already-emitted `contract.json` directly.
    */
   readonly contract?: string;
-  /** Directory `contract.json` is emitted into; defaults beside the source. */
+  /** Directory `contract.json` is emitted into; defaults beside the source, or into a glob's static prefix directory. */
   readonly output?: string;
   readonly extensions?: readonly ControlExtensionDescriptor<'surreal', 'surrealdb'>[];
   readonly migrations?: {
     readonly dir?: string;
   };
-}
-
-function deriveOutputPath(contractPath: string): string {
-  const ext = extname(contractPath);
-  if (ext.length === 0) {
-    return `${contractPath}.json`;
-  }
-  return `${contractPath.slice(0, -ext.length)}.json`;
 }
 
 function contractConfigFor(options: SurrealdbConfigOptions): ContractConfig | undefined {
@@ -49,7 +45,7 @@ function contractConfigFor(options: SurrealdbConfigOptions): ContractConfig | un
   const output =
     options.output !== undefined
       ? join(options.output, 'contract.json')
-      : deriveOutputPath(options.contract);
+      : defaultContractOutputPath(options.contract);
   return extname(options.contract) === '.ts'
     ? typescriptContractFromPath(options.contract, output)
     : surrealContract(options.contract, { output });

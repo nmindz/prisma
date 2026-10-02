@@ -1,3 +1,4 @@
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SurrealFieldInput, SurrealTableInput } from '@internal/surreal-contract';
@@ -109,12 +110,14 @@ model Post {
   author  Author
 }
 `;
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
+  const { document, sources } = parse(schema, 'schema-roundtrip.prisma');
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
   const result = interpretPslDocumentToSurrealContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'schema-roundtrip.prisma',
+    documents: [document],
+    symbolTable,
+    sources,
+    dataTypeLookup: createDataTypeLookup([]),
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
   });
   if (!result.ok) {
     throw new Error(`fixture schema failed to interpret: ${JSON.stringify(result.failure)}`);

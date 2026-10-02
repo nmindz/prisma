@@ -20,6 +20,7 @@
     "@internal/contract": "workspace:8.0.0-rc.14",
     "@internal/framework-components": "workspace:8.0.0-rc.14",
     "@internal/surreal-contract": "workspace:8.0.0-rc.14",
+    "@internal/surreal-contract-psl": "workspace:8.0.0-rc.14",
     "@internal/surreal-emitter": "workspace:8.0.0-rc.14",
     "@internal/surreal-schema-ir": "workspace:8.0.0-rc.14",
     "@internal/surreal-value": "workspace:8.0.0-rc.14",

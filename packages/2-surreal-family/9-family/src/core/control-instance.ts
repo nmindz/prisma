@@ -14,6 +14,7 @@ import {
   VERIFY_CODE_SCHEMA_FAILURE,
   VERIFY_CODE_TARGET_MISMATCH,
 } from '@internal/framework-components/control';
+import { assertNothingCastsFromSurrealExpression } from '@internal/surreal-contract';
 import type { SurrealSchemaIR } from '@internal/surreal-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { introspectSurrealSchema } from './introspect-database';
@@ -270,5 +271,6 @@ class SurrealControlFamily implements SurrealControlFamilyInstance {
 export function createSurrealFamilyInstance(
   stack: ControlStack<'surreal', string>,
 ): SurrealControlFamilyInstance {
+  assertNothingCastsFromSurrealExpression(stack.declaredDataTypes);
   return new SurrealControlFamily(stack);
 }

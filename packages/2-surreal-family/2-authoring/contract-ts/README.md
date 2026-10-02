@@ -51,6 +51,13 @@ TypeScript and a broken contract. Catching it here names the offending table
 instead of surfacing later as a query failure against the database. The same
 goes for a vector index spanning more than one field, which SurrealDB rejects.
 
+## Defaults
+
+A field takes one of two defaults, which become the two forms SurrealDB's `DEFAULT` clause holds; declaring both on one field is refused when the contract is built.
+
+- `default: string` is SurrealQL, stored as the field's `defaultExpression` and rendered unchanged: `default: 'time::now()'`.
+- `defaultValue: JsonValue` is a literal, stored as the field's `defaultValue`. It must already be the canonical form of the field codec's data type ([ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md)): `42` for an `int`, `'1.50'` for a `decimal`, `['a', 'b']` for an `array<string>`. `defineContract` passes it through as given; it does not encode a JavaScript value through the codec. A PSL `@default(42)` on an `Int` field produces the same `defaultValue`, so the two contracts hash the same.
+
 ## `onDelete` on a `record<>` field
 
 A field with a `record<>` type takes `onDelete: 'reject' | 'ignore' |
