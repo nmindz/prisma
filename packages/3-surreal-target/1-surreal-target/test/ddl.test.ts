@@ -1,11 +1,30 @@
+import type { JsonValue } from '@internal/contract/types';
 import {
+  renderSurrealType,
   SurrealAnalyzer,
   SurrealField,
   SurrealIndex,
   SurrealSequence,
   SurrealTable,
 } from '@internal/surreal-contract';
+import type { SurrealScalarTypeName } from '@internal/surreal-contract/types';
 import { describe, expect, it } from 'vitest';
+import {
+  SURREAL_ANY_CODEC_ID,
+  SURREAL_BOOL_CODEC_ID,
+  SURREAL_BYTES_CODEC_ID,
+  SURREAL_DATETIME_CODEC_ID,
+  SURREAL_DECIMAL_CODEC_ID,
+  SURREAL_DURATION_CODEC_ID,
+  SURREAL_FLOAT_CODEC_ID,
+  SURREAL_GEOMETRY_CODEC_ID,
+  SURREAL_INT_CODEC_ID,
+  SURREAL_NUMBER_CODEC_ID,
+  SURREAL_OBJECT_CODEC_ID,
+  SURREAL_RECORD_CODEC_ID,
+  SURREAL_STRING_CODEC_ID,
+  SURREAL_UUID_CODEC_ID,
+} from '../src/exports/codec-ids';
 import {
   renderCreateTableStatements,
   renderDefineAnalyzer,
@@ -374,5 +393,247 @@ describe('remove statements', () => {
   it('drop the guard when the caller wants the failure', () => {
     expect(renderRemoveTable('person', false)).toBe('REMOVE TABLE `person`');
     expect(renderRemoveSequence('userIds', false)).toBe('REMOVE SEQUENCE `userIds`');
+  });
+});
+
+describe('renderDefineField with a literal default', () => {
+  const withDefault = (
+    codecId: string,
+    type: ConstructorParameters<typeof SurrealField>[0]['type'],
+    defaultValue: JsonValue,
+    extra: Partial<ConstructorParameters<typeof SurrealField>[0]> = {},
+  ) =>
+    renderDefineField(
+      'person',
+      new SurrealField({ name: 'f', type, codecId, defaultValue, ...extra }),
+    );
+
+  const scalar = (name: SurrealScalarTypeName) => ({ kind: 'scalar', name }) as const;
+
+  it.each([
+    ['string', SURREAL_STRING_CODEC_ID, scalar('string'), 'hello', "'hello'"],
+    ['string holding a single quote', SURREAL_STRING_CODEC_ID, scalar('string'), "it's", `"it's"`],
+    [
+      'string holding both quotes and escapes',
+      SURREAL_STRING_CODEC_ID,
+      scalar('string'),
+      'it\'s "q" \\ \n\t\r\f\b\0 ☃',
+      `"it's \\"q\\" \\\\ \\n\\t\\r\\f\\u{8}\\0 ☃"`,
+    ],
+    [
+      'string holding a double quote',
+      SURREAL_STRING_CODEC_ID,
+      scalar('string'),
+      'say "hi"',
+      `'say "hi"'`,
+    ],
+    ['empty string', SURREAL_STRING_CODEC_ID, scalar('string'), '', "''"],
+    ['bool', SURREAL_BOOL_CODEC_ID, scalar('bool'), true, 'true'],
+    ['int', SURREAL_INT_CODEC_ID, scalar('int'), -42, '-42'],
+    ['decimal', SURREAL_DECIMAL_CODEC_ID, scalar('decimal'), '1.50', '1.5dec'],
+    ['whole decimal', SURREAL_DECIMAL_CODEC_ID, scalar('decimal'), '42', '42dec'],
+    ['zero decimal with a fraction', SURREAL_DECIMAL_CODEC_ID, scalar('decimal'), '0.00', '0dec'],
+    ['float', SURREAL_FLOAT_CODEC_ID, scalar('float'), 1.5, '1.5f'],
+    ['whole float', SURREAL_FLOAT_CODEC_ID, scalar('float'), 2, '2f'],
+    ['large float', SURREAL_FLOAT_CODEC_ID, scalar('float'), 1e21, '1000000000000000000000f'],
+    ['small float', SURREAL_FLOAT_CODEC_ID, scalar('float'), 1e-7, '0.0000001f'],
+    ['whole number', SURREAL_NUMBER_CODEC_ID, scalar('number'), 7, '7'],
+    ['fractional number', SURREAL_NUMBER_CODEC_ID, scalar('number'), 1.5, '1.5f'],
+    [
+      'datetime',
+      SURREAL_DATETIME_CODEC_ID,
+      scalar('datetime'),
+      '2024-01-01T00:00:00Z',
+      "d'2024-01-01T00:00:00Z'",
+    ],
+    [
+      'datetime with a fraction, in milliseconds as SurrealDB writes it',
+      SURREAL_DATETIME_CODEC_ID,
+      scalar('datetime'),
+      '2024-01-01T00:00:00.12Z',
+      "d'2024-01-01T00:00:00.120Z'",
+    ],
+    [
+      'datetime with a fraction, in nanoseconds',
+      SURREAL_DATETIME_CODEC_ID,
+      scalar('datetime'),
+      '2024-01-01T00:00:00.1234567Z',
+      "d'2024-01-01T00:00:00.123456700Z'",
+    ],
+    [
+      'datetime after year 9999',
+      SURREAL_DATETIME_CODEC_ID,
+      scalar('datetime'),
+      '+012024-01-01T00:00:00Z',
+      "d'+12024-01-01T00:00:00Z'",
+    ],
+    [
+      'datetime before year 0',
+      SURREAL_DATETIME_CODEC_ID,
+      scalar('datetime'),
+      '-000043-03-15T00:00:00Z',
+      "d'-0043-03-15T00:00:00Z'",
+    ],
+    ['duration', SURREAL_DURATION_CODEC_ID, scalar('duration'), '1h30m', '1h30m'],
+    ['zero duration', SURREAL_DURATION_CODEC_ID, scalar('duration'), '0ns', '0ns'],
+    [
+      'uuid',
+      SURREAL_UUID_CODEC_ID,
+      scalar('uuid'),
+      '018e0d1e-0000-7000-8000-00000000000a',
+      "u'018e0d1e-0000-7000-8000-00000000000a'",
+    ],
+    [
+      'record with an identifier id',
+      SURREAL_RECORD_CODEC_ID,
+      { kind: 'record', tables: ['person'] },
+      'person:alice',
+      '`person`:`alice`',
+    ],
+    [
+      'record with an integer id',
+      SURREAL_RECORD_CODEC_ID,
+      { kind: 'record', tables: ['person'] },
+      'person:-5',
+      '`person`:-5',
+    ],
+    ['empty object', SURREAL_OBJECT_CODEC_ID, scalar('object'), {}, '{  }'],
+    [
+      'object',
+      SURREAL_OBJECT_CODEC_ID,
+      scalar('object'),
+      { plan: 'free', seats: [1, 2.5], 'a b': null, _x: { "it's": true } },
+      `{ plan: 'free', seats: [1, 2.5f], "a b": NULL, _x: { "it's": true } }`,
+    ],
+    ['any text', SURREAL_ANY_CODEC_ID, scalar('any'), 'x', "'x'"],
+    ['any number with a fraction', SURREAL_ANY_CODEC_ID, scalar('any'), 1.5, '1.5f'],
+    [
+      'any whole number past the safe range',
+      SURREAL_ANY_CODEC_ID,
+      scalar('any'),
+      2 ** 60,
+      '1152921504606847000f',
+    ],
+    ['any null', SURREAL_ANY_CODEC_ID, scalar('any'), null, 'NULL'],
+    [
+      'any array',
+      SURREAL_ANY_CODEC_ID,
+      scalar('any'),
+      [1, 'two', null, []],
+      "[1, 'two', NULL, []]",
+    ],
+    [
+      'geometry point',
+      SURREAL_GEOMETRY_CODEC_ID,
+      { kind: 'geometry', shapes: ['point'] },
+      { type: 'Point', coordinates: [1, -2.5] },
+      '(1f, -2.5f)',
+    ],
+    [
+      'geometry line',
+      SURREAL_GEOMETRY_CODEC_ID,
+      { kind: 'geometry', shapes: [] },
+      {
+        type: 'LineString',
+        coordinates: [
+          [1, 2],
+          [3, 4],
+        ],
+      },
+      "{ type: 'LineString', coordinates: [[1f, 2f], [3f, 4f]] }",
+    ],
+    [
+      'geometry collection',
+      SURREAL_GEOMETRY_CODEC_ID,
+      { kind: 'geometry', shapes: [] },
+      {
+        type: 'GeometryCollection',
+        geometries: [
+          { type: 'Point', coordinates: [1, 2] },
+          {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [0, 0],
+                [1, 0],
+                [1, 1],
+                [0, 0],
+              ],
+            ],
+          },
+        ],
+      },
+      "{ type: 'GeometryCollection', geometries: [(1f, 2f), { type: 'Polygon', coordinates: [[[0f, 0f], [1f, 0f], [1f, 1f], [0f, 0f]]] }] }",
+    ],
+  ] as const)(
+    'renders a %s default as its SurrealQL literal',
+    (_name, codecId, type, value, literal) => {
+      expect(withDefault(codecId, type, value)).toBe(
+        `DEFINE FIELD \`f\` ON TABLE \`person\` TYPE ${renderSurrealType(type)} DEFAULT ${literal}`,
+      );
+    },
+  );
+
+  it.each([
+    [
+      'an array of ints',
+      SURREAL_INT_CODEC_ID,
+      { kind: 'array', of: scalar('int') },
+      [1, -2],
+      '[1, -2]',
+    ],
+    [
+      'an optional set of datetimes',
+      SURREAL_DATETIME_CODEC_ID,
+      { kind: 'option', of: { kind: 'set', of: scalar('datetime') } },
+      ['2024-01-01T00:00:00Z'],
+      "[d'2024-01-01T00:00:00Z']",
+    ],
+    [
+      'an empty array of strings',
+      SURREAL_STRING_CODEC_ID,
+      { kind: 'array', of: scalar('string') },
+      [],
+      '[]',
+    ],
+  ] as const)('renders %s element by element', (_name, codecId, type, value, literal) => {
+    expect(withDefault(codecId, type, value)).toContain(`DEFAULT ${literal}`);
+  });
+
+  it('renders DEFAULT ALWAYS with a literal', () => {
+    expect(withDefault(SURREAL_INT_CODEC_ID, scalar('int'), 0, { defaultAlways: true })).toBe(
+      'DEFINE FIELD `f` ON TABLE `person` TYPE int DEFAULT ALWAYS 0',
+    );
+  });
+
+  it('renders defaultExpression unchanged', () => {
+    expect(
+      renderDefineField(
+        'person',
+        new SurrealField({
+          name: 'f',
+          type: scalar('string'),
+          codecId: SURREAL_STRING_CODEC_ID,
+          defaultExpression: "string::concat('a', 'b')",
+        }),
+      ),
+    ).toBe("DEFINE FIELD `f` ON TABLE `person` TYPE string DEFAULT string::concat('a', 'b')");
+  });
+
+  it.each([
+    ['a bytes default, which has no literal', SURREAL_BYTES_CODEC_ID, scalar('bytes'), [1, 2]],
+    ['a codec this target does not ship', 'other/codec@1', scalar('string'), 'x'],
+    [
+      'a value not in its type canonical form',
+      SURREAL_DATETIME_CODEC_ID,
+      scalar('datetime'),
+      'soon',
+    ],
+    ['a float that is text', SURREAL_FLOAT_CODEC_ID, scalar('float'), '1.5'],
+    ['an object that is an array', SURREAL_OBJECT_CODEC_ID, scalar('object'), [1]],
+  ] as const)('refuses %s', (_name, codecId, type, value) => {
+    expect(() => withDefault(codecId, type, value)).toThrow(
+      expect.objectContaining({ code: 'RUNTIME.DDL_UNSUPPORTED' }),
+    );
   });
 });

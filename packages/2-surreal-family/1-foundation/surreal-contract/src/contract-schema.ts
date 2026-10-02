@@ -125,6 +125,7 @@ export const StorageFieldSchema = type({
   'flexible?': 'boolean',
   'readOnly?': 'boolean',
   'defaultExpression?': 'string',
+  'defaultValue?': 'string | number | boolean | null | unknown[] | Record<string, unknown>',
   'defaultAlways?': 'boolean',
   'valueExpression?': 'string',
   'assertExpression?': 'string',
@@ -195,7 +196,7 @@ const DomainFieldSchema = type({
   '+': 'reject',
   type: DomainFieldTypeSchema,
   'nullable?': 'boolean',
-  'many?': 'boolean',
+  'many?': type('false').or({ '+': 'reject', elementNullable: 'boolean' }),
   'dict?': 'boolean',
   'valueSet?': type({
     plane: "'domain'",

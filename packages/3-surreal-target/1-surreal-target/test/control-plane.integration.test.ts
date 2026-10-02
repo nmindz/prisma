@@ -1,12 +1,31 @@
+import type { JsonValue } from '@internal/contract/types';
 import { SurrealDriverImpl } from '@internal/driver-surrealdb/runtime';
 import {
   createSurrealFamilyInstance,
   ensureControlTables,
   surrealFamilyDescriptor,
 } from '@internal/family-surreal/control';
+import { type SurrealFieldInput, SurrealTable } from '@internal/surreal-contract';
+import type { SurrealScalarTypeName } from '@internal/surreal-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  SURREAL_ANY_CODEC_ID,
+  SURREAL_BOOL_CODEC_ID,
+  SURREAL_DATETIME_CODEC_ID,
+  SURREAL_DECIMAL_CODEC_ID,
+  SURREAL_DURATION_CODEC_ID,
+  SURREAL_FLOAT_CODEC_ID,
+  SURREAL_GEOMETRY_CODEC_ID,
+  SURREAL_INT_CODEC_ID,
+  SURREAL_NUMBER_CODEC_ID,
+  SURREAL_OBJECT_CODEC_ID,
+  SURREAL_RECORD_CODEC_ID,
+  SURREAL_STRING_CODEC_ID,
+  SURREAL_UUID_CODEC_ID,
+} from '../src/exports/codec-ids';
 import surrealControlTarget from '../src/exports/control';
+import { renderCreateTableStatements } from '../src/exports/ddl';
 
 const binding = {
   url: process.env['SURREALDB_TEST_URL'] ?? 'ws://127.0.0.1:8112/rpc',
@@ -71,13 +90,13 @@ const CONTRACT_JSON = {
 describe.skipIf(!available)('SurrealDB control plane against a live server', () => {
   const driver = new SurrealDriverImpl();
 
-  // The stack the framework would assemble. Only `target` is read by the
-  // family instance, so the rest is left off rather than faked.
+  // The stack the framework would assemble. Only `target` and `declaredDataTypes`
+  // are read by the family instance, so the rest is left off rather than faked.
   const family = createSurrealFamilyInstance(
     blindCast<
       Parameters<typeof createSurrealFamilyInstance>[0],
-      'the family instance reads only stack.target; assembling a full ControlStack here would add fakes the assertions never exercise'
-    >({ target: surrealControlTarget }),
+      'the family instance reads only stack.target and stack.declaredDataTypes; assembling a full ControlStack here would add fakes the assertions never exercise'
+    >({ target: surrealControlTarget, declaredDataTypes: [] }),
   );
 
   const contract = surrealControlTarget.contractSerializer.deserializeContract(CONTRACT_JSON);
@@ -214,6 +233,258 @@ describe.skipIf(!available)('SurrealDB control plane against a live server', () 
     });
     expect(result.ok).toBe(false);
     expect(result.schema.issues.map((issue) => issue.path)).toContainEqual(['person', 'name']);
+  });
+});
+
+/**
+ * A literal default the target renders reads back from SurrealDB as the same definition, so the
+ * schema comparison reports no drift. Runs in its own database: the comparison reports every table
+ * the contract does not declare.
+ */
+describe.skipIf(!available)('SurrealDB literal defaults against a live server', () => {
+  const driver = new SurrealDriverImpl();
+  const family = createSurrealFamilyInstance(
+    blindCast<
+      Parameters<typeof createSurrealFamilyInstance>[0],
+      'the family instance reads only stack.target and stack.declaredDataTypes; assembling a full ControlStack here would add fakes the assertions never exercise'
+    >({ target: surrealControlTarget, declaredDataTypes: [] }),
+  );
+  const controlDriver = blindCast<
+    Parameters<typeof family.introspect>[0]['driver'],
+    'SurrealDriverImpl implements the queryable surface the control family uses; the framework driver-instance type is the cross-family base'
+  >(driver);
+
+  const run = async (surql: string): Promise<void> => {
+    for await (const _row of driver.query({ surql })) {
+      // Drive the statement.
+    }
+  };
+
+  beforeAll(async () => {
+    await driver.connect({ ...binding, database: 'literal_defaults' });
+  });
+
+  afterAll(async () => {
+    await driver.close();
+  });
+
+  const TABLE = 'literal_default';
+
+  const contractWith = (field: SurrealFieldInput) =>
+    surrealControlTarget.contractSerializer.deserializeContract({
+      ...CONTRACT_JSON,
+      storage: {
+        ...CONTRACT_JSON.storage,
+        namespaces: {
+          __unbound__: {
+            id: '__unbound__',
+            entries: { table: { [TABLE]: { schemafull: true, fields: [field] } } },
+          },
+        },
+      },
+    });
+
+  const apply = async (field: SurrealFieldInput): Promise<void> => {
+    await run(`REMOVE TABLE IF EXISTS \`${TABLE}\``);
+    for (const statement of renderCreateTableStatements(
+      TABLE,
+      new SurrealTable({ fields: [field] }),
+    )) {
+      await run(statement);
+    }
+  };
+
+  const verifyAgainst = async (field: SurrealFieldInput) => {
+    const schema = await family.introspect({ driver: controlDriver });
+    return family.verifySchema({
+      contract: contractWith(field),
+      schema,
+      strict: false,
+      frameworkComponents: [],
+    });
+  };
+
+  const field = (
+    codecId: string,
+    type: SurrealFieldInput['type'],
+    defaultValue: JsonValue,
+    extra: Partial<SurrealFieldInput> = {},
+  ): SurrealFieldInput => ({ name: 'f', type, codecId, defaultValue, ...extra });
+
+  const scalar = (name: SurrealScalarTypeName) => ({ kind: 'scalar', name }) as const;
+
+  it.each([
+    ['string', field(SURREAL_STRING_CODEC_ID, scalar('string'), 'hello')],
+    [
+      'string with quotes and escapes',
+      field(SURREAL_STRING_CODEC_ID, scalar('string'), 'it\'s "q" \\ \n\t\r\f\b\0 ☃'),
+    ],
+    ['string with a double quote', field(SURREAL_STRING_CODEC_ID, scalar('string'), 'say "hi"')],
+    ['bool', field(SURREAL_BOOL_CODEC_ID, scalar('bool'), true)],
+    ['int', field(SURREAL_INT_CODEC_ID, scalar('int'), -9007199254740991)],
+    ['decimal', field(SURREAL_DECIMAL_CODEC_ID, scalar('decimal'), '-007.50')],
+    [
+      'decimal at its limits',
+      field(SURREAL_DECIMAL_CODEC_ID, scalar('decimal'), '7.9228162514264337593543950335'),
+    ],
+    ['float', field(SURREAL_FLOAT_CODEC_ID, scalar('float'), 1.5)],
+    ['whole float', field(SURREAL_FLOAT_CODEC_ID, scalar('float'), 2)],
+    ['tiny float', field(SURREAL_FLOAT_CODEC_ID, scalar('float'), 5e-324)],
+    ['whole number', field(SURREAL_NUMBER_CODEC_ID, scalar('number'), 7)],
+    ['fractional number', field(SURREAL_NUMBER_CODEC_ID, scalar('number'), -0.25)],
+    ['datetime', field(SURREAL_DATETIME_CODEC_ID, scalar('datetime'), '2024-01-01T00:00:00Z')],
+    [
+      'datetime with a millisecond fraction',
+      field(SURREAL_DATETIME_CODEC_ID, scalar('datetime'), '2024-01-01T00:00:00.12Z'),
+    ],
+    [
+      'datetime with a nanosecond fraction before year 0',
+      field(SURREAL_DATETIME_CODEC_ID, scalar('datetime'), '-000043-03-15T00:00:00.1234567Z'),
+    ],
+    [
+      'datetime after year 9999',
+      field(SURREAL_DATETIME_CODEC_ID, scalar('datetime'), '+012024-01-01T00:00:00.5Z'),
+    ],
+    [
+      'earliest datetime',
+      field(SURREAL_DATETIME_CODEC_ID, scalar('datetime'), '-262143-01-01T00:00:00Z'),
+    ],
+    [
+      'latest datetime',
+      field(SURREAL_DATETIME_CODEC_ID, scalar('datetime'), '+262142-12-31T23:59:59.999999999Z'),
+    ],
+    ['duration', field(SURREAL_DURATION_CODEC_ID, scalar('duration'), '1h30m')],
+    ['zero duration', field(SURREAL_DURATION_CODEC_ID, scalar('duration'), '0ns')],
+    [
+      'duration in every unit',
+      field(SURREAL_DURATION_CODEC_ID, scalar('duration'), '1y2w3d4h5m6s7ms8µs9ns'),
+    ],
+    ['uuid', field(SURREAL_UUID_CODEC_ID, scalar('uuid'), '018e0d1e-0000-7000-8000-00000000000a')],
+    [
+      'record with an identifier id',
+      field(SURREAL_RECORD_CODEC_ID, { kind: 'record', tables: [] }, 'person:alice'),
+    ],
+    [
+      'record with a negative integer id',
+      field(SURREAL_RECORD_CODEC_ID, { kind: 'record', tables: [] }, 'person:-5'),
+    ],
+    [
+      'record on a keyword table',
+      field(SURREAL_RECORD_CODEC_ID, { kind: 'record', tables: [] }, 'select:NONE'),
+    ],
+    ['empty object', field(SURREAL_OBJECT_CODEC_ID, scalar('object'), {})],
+    [
+      'object',
+      field(SURREAL_OBJECT_CODEC_ID, scalar('object'), {
+        zeta: 1,
+        plan: 'free',
+        seats: [1, 2.5, 1e21],
+        'a b': null,
+        '1x': { "it's": true, é: [] },
+        select: 'x',
+      }),
+    ],
+    ['any text', field(SURREAL_ANY_CODEC_ID, scalar('any'), 'x')],
+    ['any number', field(SURREAL_ANY_CODEC_ID, scalar('any'), 1.5)],
+    ['any null', field(SURREAL_ANY_CODEC_ID, scalar('any'), null)],
+    ['any array', field(SURREAL_ANY_CODEC_ID, scalar('any'), [1, 'two', null, [true]])],
+    [
+      'geometry point',
+      field(
+        SURREAL_GEOMETRY_CODEC_ID,
+        { kind: 'geometry', shapes: [] },
+        { type: 'Point', coordinates: [1, -2.5] },
+      ),
+    ],
+    [
+      'geometry polygon with a hole',
+      field(
+        SURREAL_GEOMETRY_CODEC_ID,
+        { kind: 'geometry', shapes: [] },
+        {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [0, 0],
+              [10, 0],
+              [10, 10],
+              [0, 0],
+            ],
+            [
+              [1, 1],
+              [2, 1],
+              [2, 2],
+              [1, 1],
+            ],
+          ],
+        },
+      ),
+    ],
+    [
+      'geometry multi-shapes in a collection',
+      field(
+        SURREAL_GEOMETRY_CODEC_ID,
+        { kind: 'geometry', shapes: [] },
+        {
+          type: 'GeometryCollection',
+          geometries: [
+            { type: 'MultiPoint', coordinates: [[1, 2]] },
+            {
+              type: 'MultiLineString',
+              coordinates: [
+                [
+                  [1, 2],
+                  [3, 4],
+                ],
+              ],
+            },
+            {
+              type: 'MultiPolygon',
+              coordinates: [
+                [
+                  [
+                    [0, 0],
+                    [1, 0],
+                    [1, 1],
+                    [0, 0],
+                  ],
+                ],
+              ],
+            },
+            {
+              type: 'LineString',
+              coordinates: [
+                [1, 2],
+                [3, 4],
+              ],
+            },
+            { type: 'GeometryCollection', geometries: [{ type: 'Point', coordinates: [0, 0] }] },
+          ],
+        },
+      ),
+    ],
+    ['array of ints', field(SURREAL_INT_CODEC_ID, { kind: 'array', of: scalar('int') }, [1, -2])],
+    [
+      'array of datetimes',
+      field(SURREAL_DATETIME_CODEC_ID, { kind: 'array', of: scalar('datetime') }, [
+        '2024-01-01T00:00:00.5Z',
+      ]),
+    ],
+    [
+      'int that is always written',
+      field(SURREAL_INT_CODEC_ID, scalar('int'), 0, { defaultAlways: true }),
+    ],
+  ] as const)('reports no drift for a field with a %s literal default', async (_name, input) => {
+    await apply(input);
+    const result = await verifyAgainst(input);
+    expect(result).toMatchObject({ ok: true, schema: { issues: [] } });
+  });
+
+  it('reports drift when the live default is not the contract literal', async () => {
+    await apply(field(SURREAL_DECIMAL_CODEC_ID, scalar('decimal'), '1.50'));
+    const result = await verifyAgainst(field(SURREAL_DECIMAL_CODEC_ID, scalar('decimal'), '1.51'));
+    expect(result.ok).toBe(false);
+    expect(result.schema.issues.map((issue) => issue.path)).toContainEqual([TABLE, 'f']);
   });
 });
 

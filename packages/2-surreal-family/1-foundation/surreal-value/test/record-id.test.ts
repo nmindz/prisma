@@ -56,6 +56,13 @@ describe('tagged scalars', () => {
     expect(instant.toDate().toISOString()).toBe('2024-01-02T03:04:05.123Z');
   });
 
+  it.each([
+    ['a year past 9999', Date.UTC(12024, 0, 1) / 1000, 500_000_000, '+012024-01-01T00:00:00.5Z'],
+    ['a year before 0000', Date.UTC(-43, 2, 15) / 1000, 0, '-000043-03-15T00:00:00Z'],
+  ])('writes %s with a signed six-digit year', (_label, seconds, nanos, expected) => {
+    expect(new SurrealDatetime([seconds, nanos] as const).value).toBe(expected);
+  });
+
   it('keeps decimals as text rather than routing them through a JS number', () => {
     expect(new SurrealDecimal('12345678901234567890.0987654321').value).toBe(
       '12345678901234567890.0987654321',

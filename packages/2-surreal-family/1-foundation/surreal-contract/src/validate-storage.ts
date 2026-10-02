@@ -69,6 +69,12 @@ function checkIndex(tableName: string, index: SurrealIndex): void {
 }
 
 function checkField(tableName: string, field: SurrealField): void {
+  if (field.defaultValue !== undefined && field.defaultExpression !== undefined) {
+    throw invalid(
+      `Field "${field.name}" on table "${tableName}" declares both a default value and a default expression; a DEFAULT clause holds one`,
+      { table: tableName, field: field.name },
+    );
+  }
   if (field.reference === undefined) return;
   const referenced: string[] = [];
   collectRecordTables(field.type, referenced);

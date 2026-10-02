@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import { freezeNode, IRNodeBase } from '@internal/framework-components/ir';
 import type { SurrealFieldType, SurrealPermissions, SurrealReferenceAction } from '../field-types';
 import { defineNodeKind } from './node-kind';
@@ -23,6 +24,8 @@ export interface SurrealFieldInput {
   readonly readOnly?: boolean;
   /** `DEFAULT <expr>`, held as SurrealQL source. */
   readonly defaultExpression?: string;
+  /** `DEFAULT <literal>`, held as the canonical form of the field codec's data type (ADR 254). */
+  readonly defaultValue?: JsonValue;
   /** `DEFAULT ALWAYS <expr>` rather than default-on-create-only. */
   readonly defaultAlways?: boolean;
   /** `VALUE <expr>` — recomputed on every write. */
@@ -51,6 +54,7 @@ export class SurrealField extends IRNodeBase {
   declare readonly flexible?: boolean;
   declare readonly readOnly?: boolean;
   declare readonly defaultExpression?: string;
+  declare readonly defaultValue?: JsonValue;
   declare readonly defaultAlways?: boolean;
   declare readonly valueExpression?: string;
   declare readonly assertExpression?: string;
@@ -67,6 +71,7 @@ export class SurrealField extends IRNodeBase {
     if (input.flexible !== undefined) this.flexible = input.flexible;
     if (input.readOnly !== undefined) this.readOnly = input.readOnly;
     if (input.defaultExpression !== undefined) this.defaultExpression = input.defaultExpression;
+    if (input.defaultValue !== undefined) this.defaultValue = input.defaultValue;
     if (input.defaultAlways !== undefined) this.defaultAlways = input.defaultAlways;
     if (input.valueExpression !== undefined) this.valueExpression = input.valueExpression;
     if (input.assertExpression !== undefined) this.assertExpression = input.assertExpression;

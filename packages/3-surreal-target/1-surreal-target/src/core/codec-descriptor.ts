@@ -5,18 +5,17 @@ import type {
   CodecInstanceContext,
   CodecTrait,
 } from '@internal/framework-components/codec';
-import { CodecDescriptorImpl, voidParamsSchema } from '@internal/framework-components/codec';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
+import { CodecDescriptorImpl } from '@internal/framework-components/codec';
 
 /**
  * Every SurrealDB codec is non-parameterized: SurrealQL's scalar types carry
  * no length, precision, or scale the way `varchar(n)` or `numeric(p,s)` do,
  * so there is nothing for a codec factory to be parameterized over. The
  * shared base fixes `P = void` and leaves subclasses to declare only their
- * id, traits, target types, and conversions.
+ * id, data type, traits, target types, and conversions.
  */
 export abstract class SurrealCodecDescriptor extends CodecDescriptorImpl<void> {
-  readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
 
   abstract override readonly codecId: string;
   abstract override readonly traits: readonly CodecTrait[];

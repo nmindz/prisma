@@ -184,6 +184,33 @@ describe('validateSurrealTables', () => {
     });
     expect(() => validateSurrealTables({ person, table })).not.toThrow();
   });
+
+  it('carries a literal default as its canonical JSON value', () => {
+    const table = new SurrealTable({
+      fields: [
+        { name: 'score', type: { kind: 'scalar', name: 'int' }, codecId: 'i', defaultValue: 42 },
+      ],
+    });
+    expect(table.fields[0]?.defaultValue).toBe(42);
+    expect(() => validateSurrealTables({ table })).not.toThrow();
+  });
+
+  it('rejects a field declaring both a default value and a default expression', () => {
+    const table = new SurrealTable({
+      fields: [
+        {
+          name: 'score',
+          type: { kind: 'scalar', name: 'int' },
+          codecId: 'i',
+          defaultValue: 42,
+          defaultExpression: '42',
+        },
+      ],
+    });
+    expect(() => validateSurrealTables({ table })).toThrow(
+      /Field "score" on table "table" declares both a default value and a default expression/,
+    );
+  });
 });
 
 describe('composeSurrealEntityKinds', () => {

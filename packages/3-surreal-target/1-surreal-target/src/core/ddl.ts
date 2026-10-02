@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import {
   escapeStringLiteral,
   quoteIdentifier,
@@ -7,6 +8,7 @@ import {
   type SurrealIndex,
   type SurrealSequence,
   type SurrealTable,
+  unwrapOptional,
 } from '@internal/surreal-contract';
 import type {
   SurrealIndexVariant,
@@ -14,6 +16,11 @@ import type {
   SurrealReferenceAction,
 } from '@internal/surreal-contract/types';
 import { assertNever } from '@internal/utils/internal-error';
+import { isStructuredError } from '@internal/utils/structured-error';
+import { surrealTargetError } from './errors';
+import { isJsonArray } from './json-document';
+import { surrealCodecRegistry } from './registry';
+import { surrealqlLiteral } from './surrealql-literal';
 
 function join(parts: readonly string[]): string {
   return parts.filter((part) => part.length > 0).join(' ');
@@ -71,6 +78,42 @@ function renderReference(reference: SurrealReferenceAction): string {
     default:
       return assertNever(reference, 'unreachable: every SurrealReferenceAction kind is rendered');
   }
+}
+
+/**
+ * A literal default, written through the literal of the data type its codec represents. On a list
+ * field the codec is the element's, so the list is written element by element.
+ */
+function renderDefaultValue(tableName: string, field: SurrealField, value: JsonValue): string {
+  const dataType = surrealCodecRegistry.get(field.codecId)?.dataType;
+  if (dataType === undefined) {
+    throw surrealTargetError(
+      'RUNTIME.DDL_UNSUPPORTED',
+      `Field "${field.name}" on table "${tableName}" has a default value, but its codec "${field.codecId}" is not one this target ships, so its literal is unknown.`,
+      { meta: { table: tableName, field: field.name, codecId: field.codecId } },
+    );
+  }
+  const holdsList = ['array', 'set'].includes(unwrapOptional(field.type).kind);
+  try {
+    if (holdsList && isJsonArray(value)) {
+      return `[${value.map((element) => surrealqlLiteral(dataType, element)).join(', ')}]`;
+    }
+    return surrealqlLiteral(dataType, value);
+  } catch (error) {
+    if (!isStructuredError(error) || error.code !== 'RUNTIME.DDL_UNSUPPORTED') throw error;
+    throw surrealTargetError(
+      'RUNTIME.DDL_UNSUPPORTED',
+      `Field "${field.name}" on table "${tableName}" has a default value with no SurrealQL literal. ${error.message}`,
+      { meta: { table: tableName, field: field.name, codecId: field.codecId }, cause: error },
+    );
+  }
+}
+
+function renderDefault(tableName: string, field: SurrealField): string {
+  const always = field.defaultAlways === true ? 'ALWAYS ' : '';
+  if (field.defaultExpression !== undefined) return `DEFAULT ${always}${field.defaultExpression}`;
+  if (field.defaultValue === undefined) return '';
+  return `DEFAULT ${always}${renderDefaultValue(tableName, field, field.defaultValue)}`;
 }
 
 /**
@@ -139,9 +182,7 @@ export function renderDefineField(
     `TYPE ${renderSurrealType(field.type)}`,
     field.flexible === true ? 'FLEXIBLE' : '',
     field.reference === undefined ? '' : renderReference(field.reference),
-    field.defaultExpression === undefined
-      ? ''
-      : `DEFAULT ${field.defaultAlways === true ? 'ALWAYS ' : ''}${field.defaultExpression}`,
+    renderDefault(tableName, field),
     field.valueExpression === undefined ? '' : `VALUE ${field.valueExpression}`,
     field.assertExpression === undefined ? '' : `ASSERT ${field.assertExpression}`,
     field.readOnly === true ? 'READONLY' : '',

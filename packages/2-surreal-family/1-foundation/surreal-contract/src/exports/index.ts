@@ -40,4 +40,13 @@ export type { SurrealTableInput } from '../ir/surreal-table';
 export { SurrealTable } from '../ir/surreal-table';
 export { SurrealUnboundNamespace } from '../ir/surreal-unbound-namespace';
 export { renderSurrealType, unwrapOptional } from '../render-type';
+export {
+  assertNothingCastsFromSurrealExpression,
+  printSurrealExpressionLiteral,
+  SURREAL_EXPRESSION_DATA_TYPE_ID,
+  SURREAL_EXPRESSION_TAG,
+  surrealExpressionAuthoringEntry,
+  surrealExpressionDataType,
+  surrealExpressionTextFromCanonical,
+} from '../surreal-expression';
 export { linkedTableNames, validateSurrealTables } from '../validate-storage';

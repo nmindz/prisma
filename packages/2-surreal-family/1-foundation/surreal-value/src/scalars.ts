@@ -87,7 +87,8 @@ function partsOf(value: string | Date | readonly [number, number]): readonly [nu
 }
 
 function formatInstant(seconds: number, nanos: number): string {
-  const base = new Date(seconds * 1000).toISOString().slice(0, 19);
+  // Not a fixed-width slice: a year outside 0000-9999 is a signed six-digit year.
+  const base = new Date(seconds * 1000).toISOString().replace(/\.\d{3}Z$/, '');
   if (nanos === 0) return `${base}Z`;
   return `${base}.${String(nanos).padStart(9, '0').replace(/0+$/, '')}Z`;
 }

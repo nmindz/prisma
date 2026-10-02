@@ -14,6 +14,7 @@ export const SURREAL_DURATION_CODEC_ID = 'surrealdb/duration@1';
 export const SURREAL_FLOAT_CODEC_ID = 'surrealdb/float@1';
 export const SURREAL_GEOMETRY_CODEC_ID = 'surrealdb/geometry@1';
 export const SURREAL_INT_CODEC_ID = 'surrealdb/int@1';
+export const SURREAL_NUMBER_CODEC_ID = 'surrealdb/number@1';
 export const SURREAL_OBJECT_CODEC_ID = 'surrealdb/object@1';
 export const SURREAL_RECORD_CODEC_ID = 'surrealdb/record@1';
 export const SURREAL_STRING_CODEC_ID = 'surrealdb/string@1';
@@ -29,6 +30,7 @@ export const surrealCodecIds = [
   SURREAL_FLOAT_CODEC_ID,
   SURREAL_GEOMETRY_CODEC_ID,
   SURREAL_INT_CODEC_ID,
+  SURREAL_NUMBER_CODEC_ID,
   SURREAL_OBJECT_CODEC_ID,
   SURREAL_RECORD_CODEC_ID,
   SURREAL_STRING_CODEC_ID,

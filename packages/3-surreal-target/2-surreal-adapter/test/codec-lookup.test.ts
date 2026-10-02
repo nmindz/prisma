@@ -1,10 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
-import {
-  CodecDescriptorImpl,
-  CodecImpl,
-  voidParamsSchema,
-} from '@internal/framework-components/codec';
+import { CodecDescriptorImpl, CodecImpl, dataType } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { assembleSurrealCodecLookup } from '../src/core/codec-lookup';
 
@@ -33,8 +29,11 @@ class StubCodec extends CodecImpl<string, readonly [], string, string> {
   }
 }
 
+const stubDataType = dataType('test/stub', {});
+
 class StubDescriptor extends CodecDescriptorImpl<void> {
-  readonly paramsSchema = voidParamsSchema;
+  readonly paramsSchema = undefined;
+  readonly dataType = stubDataType.id;
   readonly traits = [] as const;
   readonly codecId: string;
   readonly targetTypes: readonly string[];
